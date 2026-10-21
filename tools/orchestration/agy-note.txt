@@ -1,0 +1,5 @@
+ENVIRONMENT NOTE (macOS host, Apple Silicon): Rust stable (Homebrew, 1.99) with clippy and rustfmt. Installing anything is FORBIDDEN: no brew, no rustup, no cargo install, no sudo. Dependencies only from .ai-context/architecture.md §3 (cargo add/edit Cargo.toml is fine for those).
+HEAVY COMMANDS: other agents run in parallel worktrees on the same machine. cargo build/check/clippy/test lock themselves (cargo wrapper on your PATH when present); prefix any other heavy command with `heavy` if it exists.
+NEVER open real serial ports or talk to a real POS; tests use MemoryTransport/ManualClock, the simulator, or TCP on 127.0.0.1:0. No thread::sleep in tests.
+docs/protocol-spec.md is normative: exact bytes, field indexes, link rules. If something there looks wrong or is missing, do not guess: choose the conservative option and report it.
+Write commit messages, code, comments and rustdoc in English; CLI/simulator human output in es-CL (tú).
