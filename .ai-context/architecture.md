@@ -80,7 +80,7 @@ transbank-SDK/
 | `serde` | 1 | transbank-pos (optional, feature `serde`) | `derive` | Serializar respuestas (p. ej. para Tauri) |
 | `tracing` | 0.1 | transbank-pos (optional, feature `tracing`) | — | Trazas de enlace (`security-model.md` §3) |
 | `clap` | 4 | transbank-pos-cli, transbank-pos-sim (bin) | `derive` | Argumentos |
-| `serde_json` | 1 | transbank-pos-cli | — | Salida `--json` |
+| `serde_json` | 1 | transbank-pos-cli; dev-dependency de transbank-pos | — | Salida `--json`; tests de la feature `serde` |
 | `tracing-subscriber` | 0.3 | transbank-pos-cli | `fmt`, `env-filter` | `--trace-file` / `RUST_LOG` (trazas redactadas de la librería) |
 | `proptest` | 1 | dev-dependency | — | Propiedades del decodificador y del parseo |
 | `tokio` | 1 | **solo desde ASYNC-01**, optional | `rt`, `time`, `io-util`, `net`, `sync` | API async |

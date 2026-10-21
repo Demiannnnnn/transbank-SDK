@@ -458,3 +458,101 @@ fn binary_help_declares_unofficial() {
     let help = String::from_utf8_lossy(&output.stdout);
     assert!(help.contains("NO oficial"), "{help}");
 }
+
+#[test]
+fn new_command_supersedes_a_pending_response() {
+    let mut sim = sim().with_scenario(Scenario::Intermediate(vec![78, 81]));
+    let first = sim.feed(&frame("0200|000012000|1||0|1"));
+    assert_eq!(frames_in(&first), ["0900|78"]);
+    // The host gives up and polls instead of acknowledging the 0900.
+    assert_eq!(sim.feed(&frame("0100")), [ACK]);
+    assert_eq!(
+        sim.feed(&[ACK]),
+        Vec::<u8>::new(),
+        "nothing pending any more"
+    );
+}
+
+#[test]
+fn malformed_request_answers_code_61() {
+    let (_, responses) = exchange(&mut sim(), "0200|12a|1||0|0");
+    assert_eq!(responses, ["0210|61"]);
+}
+
+#[test]
+fn unknown_command_is_only_acknowledged() {
+    assert_eq!(exchange(&mut sim(), "9999|x"), (true, vec![]));
+}
+
+#[test]
+fn amount_above_nine_digits_answers_68() {
+    let (_, responses) = exchange(&mut sim(), "0200|1000000000|1||0|0");
+    assert_eq!(field(&responses[0], 1), "68");
+}
+
+#[test]
+fn fixed_clock_is_reported() {
+    let date = transbank_pos::PosDate::parse("31122030").unwrap();
+    let time = transbank_pos::PosTime::parse("235959").unwrap();
+    let mut sim = sim().with_clock_fixed(date, time);
+    let (_, sale) = exchange(&mut sim, "0200|000012000|1||0|0");
+    let sale = parse_sale(&sale[0]).unwrap();
+    assert_eq!(sale.real_date, Some(date));
+    assert_eq!(sale.accounting_date, Some(date));
+    assert_eq!(sale.real_time, Some(time));
+}
+
+#[test]
+fn operation_numbers_are_consecutive_and_six_digits() {
+    let mut sim = sim();
+    for expected in 1..=3 {
+        let (_, sale) = exchange(&mut sim, "0200|000012000|1||0|0");
+        assert_eq!(field(&sale[0], 10), format!("{expected:06}"));
+    }
+}
+
+#[test]
+fn simulator_state_survives_reconnections() {
+    let mut server = TcpServer::bind("127.0.0.1:0", false).unwrap();
+    let addr = server.local_addr().unwrap();
+    let handle = std::thread::spawn(move || {
+        let mut sim = PosSimulator::new(TerminalKind::Integrado);
+        server.serve_one(&mut sim)?;
+        server.serve_one(&mut sim)?;
+        Ok::<_, transbank_pos::Error>(sim.sales().len())
+    });
+    for _ in 0..2 {
+        let mut stream = TcpStream::connect(addr).unwrap();
+        stream.write_all(&frame("0200|000001000|1||0|0")).unwrap();
+        let mut buf = [0u8; 256];
+        let mut received = Vec::new();
+        while frames_in(&received).is_empty() {
+            let n = stream.read(&mut buf).unwrap();
+            assert!(n > 0, "connection closed early");
+            received.extend_from_slice(&buf[..n]);
+        }
+        stream.write_all(&[ACK]).unwrap();
+    }
+    assert_eq!(handle.join().unwrap().unwrap(), 2);
+}
+
+#[test]
+fn tcp_observer_sees_input_and_output() {
+    let mut server = TcpServer::bind("127.0.0.1:0", false).unwrap();
+    let addr = server.local_addr().unwrap();
+    let handle = std::thread::spawn(move || {
+        let mut sim = PosSimulator::new(TerminalKind::Integrado);
+        let mut seen = Vec::new();
+        server.serve_one_with(&mut sim, &mut |input, output| {
+            seen.push((input.to_vec(), output.to_vec()));
+        })?;
+        Ok::<_, transbank_pos::Error>(seen)
+    });
+    let mut stream = TcpStream::connect(addr).unwrap();
+    stream.write_all(&frame("0100")).unwrap();
+    let mut ack = [0u8; 1];
+    stream.read_exact(&mut ack).unwrap();
+    drop(stream);
+    let seen = handle.join().unwrap().unwrap();
+    assert_eq!(seen, [(frame("0100"), vec![ACK])]);
+}

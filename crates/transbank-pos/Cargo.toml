@@ -27,6 +27,7 @@ tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true
+serde_json.workspace = true
 # Path only (no version): `cargo publish` strips it, so this crate can be published
 # before the simulator.
 transbank-pos-sim = { path = "../transbank-pos-sim" }
