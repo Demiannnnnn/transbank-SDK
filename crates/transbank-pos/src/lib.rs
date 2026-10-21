@@ -17,6 +17,34 @@
 //! The wire protocol is described in
 //! [`docs/protocol-spec.md`](https://github.com/Demiannnnnn/transbank-SDK/blob/develop/docs/protocol-spec.md).
 //!
+//! ## Example
+//!
+//! A sale against the simulator of the `transbank-pos-sim` crate. With a real
+//! terminal the transport is a serial port (`serial::SerialTransport`) or a TCP
+//! bridge, and the clock is the system one (`PosIntegrado::new`).
+//!
+//! ```
+//! use transbank_pos::{LinkConfig, PosIntegrado, SaleRequest, SalesDetailMode};
+//! use transbank_pos::transport::ManualClock;
+//! use transbank_pos_sim::{PosSimulator, SimTransport, TerminalKind};
+//!
+//! let clock = ManualClock::new();
+//! let transport = SimTransport::new(PosSimulator::new(TerminalKind::Integrado), clock.clone());
+//! let mut pos = PosIntegrado::with_clock(transport, LinkConfig::default(), clock);
+//!
+//! pos.poll()?;
+//! let sale = pos.sale_with_status(&SaleRequest::new(12_000, "ABC123")?, |status| {
+//!     // "Esperando Leer Tarjeta", "Solicitando Ingreso de Clave"…
+//!     let _ = status.message();
+//! })?;
+//! assert!(sale.is_approved());
+//!
+//! let detail = pos.sales_detail(SalesDetailMode::SendToHost)?;
+//! assert_eq!(detail.len(), 1);
+//! assert!(pos.close()?.is_approved());
+//! # Ok::<(), transbank_pos::Error>(())
+//! ```
+//!
 //! ## Status
 //!
 //! Early development: the API is not stable and the crate has not been validated
@@ -40,6 +68,7 @@ pub mod protocol;
 pub mod serial;
 pub mod transport;
 
+pub use client::PosIntegrado;
 pub use codes::{IntermediateStatus, ResponseCode};
 pub use error::{Error, Result};
 pub use link::{Link, LinkConfig};

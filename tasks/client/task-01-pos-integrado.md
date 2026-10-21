@@ -3,7 +3,7 @@
 | Atributo | Detalle |
 |:--|:--|
 | **ID** | `TASK-CLIENT-01` |
-| **Estado** | ⬜ pendiente |
+| **Estado** | ✅ hecho |
 | **Rama** | `dev/client-01-pos-integrado` |
 | **Depende de** | PROTO-02, LINK-01, SIM-01 |
 | **Restricciones** | API-01…07, LINK-03, QA-02, ADR-03, ADR-04 · `public-api.md` §8 · `docs/protocol-spec.md` §4, §8 |
@@ -49,10 +49,30 @@ Para **cada** método público: caso feliz con asserts sobre los campos. Además
 
 ## 5. Definición de terminado
 
-- [ ] RF-01…RF-03.
-- [ ] AGENTS.md §8 en verde (doctests incluidos).
-- [ ] Reporte completo.
+- [x] RF-01…RF-03.
+- [x] AGENTS.md §8 en verde (doctests incluidos).
+- [x] Reporte completo.
 
 ## Reporte
 
-_(pendiente)_
+Implementada por Claude (fallback: cuota Gemini en 0 %), 2026-10-21.
+
+- `client/integrado.rs`: `PosIntegrado<T, C>` con todos los métodos de `public-api.md` §8 salvo `open`/`autoconnect` (SERIAL-01). Cada método usa el payload, el parser y el `FC_*` de PROTO-02.
+  - `sale`/`multicode_sale` envían `status = 0`; las variantes `_with_status`, `status = 1`.
+  - `sales_detail(PrintOnPos)` usa `send_command` y devuelve `vec![]`.
+  - `sale` tiene la sección "Timeouts y doble cobro" con un doctest que ejecuta el flujo de ADR-04 contra el simulador.
+  - Sin lógica nueva en `message` ni en `link`.
+- Reexporta `PosIntegrado` en la raíz. El ejemplo de crate (`//!`) corre contra el simulador como doctest.
+- **Dev-dependency `transbank-pos-sim` solo por `path` (sin versión):**
+  - El ciclo de dev-dependency funciona en tests de integración, doctests y ejemplos (los tipos se unifican).
+  - `cargo package` quita esa dependencia del manifiesto, así que `transbank-pos` se puede publicar antes que el simulador.
+  - **Para DOCS-01:** el `.crate` incluye `tests/` y `examples/`, que usan el simulador. No compilan sin él, pero `cargo publish` solo compila la lib. Conviene excluirlos del paquete o dejarlos y documentarlo.
+- **Ejemplos:** `examples/{poll,sale,detail}.rs` corren contra `SimTransport` en memoria; SERIAL-01 los pasa a `TBK_POS_TCP`/`TBK_POS_PORT`.
+  - `sale` muestra los `0900` y "Aprobada: $12.000 autorización 112648 operación 000001", y ante un timeout consulta `last_sale`.
+  - `detail` lista 2 ventas y los totales.
+- **Tests:** 17 en `tests/client_integrado.rs`.
+  - Un caso feliz por cada método público.
+  - Todos los casos de la sección 4: rechazo, `0900` (78, 81, 82), `NoResponse` ⇒ `ResponseTimeout` a los 150 s simulados y `last_sale` resuelve sin reenviar la venta, `NakNext(2)`, `DropAcks(3)` ⇒ `NoAck` a los 6 s, `CorruptLrc(1)`, `WrongFunctionCode`, `RequireClose` + `close`, anulación de crédito y de débito (8), detalle vacío y de 3 ventas en orden, totales.
+  - `Send`.
+  - 172 tests en total en el workspace.
+- AGENTS.md §8: los cinco comandos en verde; `validate.sh` OK.

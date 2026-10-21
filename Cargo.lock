@@ -723,6 +723,7 @@ dependencies = [
  "serialport",
  "thiserror",
  "tracing",
+ "transbank-pos-sim",
 ]
 
 [[package]]
