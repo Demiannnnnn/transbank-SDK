@@ -18,11 +18,15 @@
 //! ```
 
 mod decoder;
+pub(crate) mod fields;
 mod frame;
+mod function_codes;
 mod lrc;
+pub(crate) mod types;
 
 pub use decoder::{FrameDecoder, LinkEvent};
 pub use frame::{decode_latin1, encode_frame};
+pub use function_codes::*;
 pub use lrc::lrc;
 
 /// Start of frame.
