@@ -1,7 +1,9 @@
-//! Byte channels to the terminal ([`Transport`]), injectable clocks ([`Clock`]) and
-//! the in-memory transport for tests.
+//! Byte channels to the terminal ([`Transport`]), injectable clocks ([`Clock`]), the
+//! TCP transport and the in-memory transport for tests. The serial port transport is
+//! in `transbank_pos::serial` (feature `serial`).
 
 mod memory;
+mod tcp;
 
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -9,6 +11,7 @@ use std::time::{Duration, Instant};
 use crate::error::Result;
 
 pub use memory::{ManualClock, MemoryTransport};
+pub use tcp::TcpTransport;
 
 /// Byte channel to the POS (serial port, TCP bridge, memory…).
 ///
