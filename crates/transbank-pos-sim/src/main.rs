@@ -32,7 +32,7 @@ struct Cli {
     kind: Kind,
     /// Escenario: approve, reject:CÓDIGO, intermediate, no-response, corrupt-lrc:N,
     /// require-close, drop-acks:N, nak:N, voucher:LÍNEAS.
-    #[arg(long, default_value = "approve", value_parser = parse_scenario)]
+    #[arg(long, default_value = "approve")]
     scenario: Scenario,
     /// Demora antes de cada respuesta, en milisegundos (demos).
     #[arg(long, default_value_t = 0)]
@@ -46,30 +46,6 @@ struct Cli {
 enum Kind {
     Integrado,
     Autoservicio,
-}
-
-fn parse_scenario(text: &str) -> Result<Scenario, String> {
-    let (name, argument) = text.split_once(':').unwrap_or((text, ""));
-    let number = |what: &str| -> Result<u8, String> {
-        argument
-            .parse()
-            .map_err(|_| format!("el escenario {name} requiere {what} (p. ej. {name}:1)"))
-    };
-    match name {
-        "approve" => Ok(Scenario::Approve),
-        "reject" => argument
-            .parse()
-            .map(Scenario::RejectNextSale)
-            .map_err(|_| "reject requiere un código (p. ej. reject:1)".to_owned()),
-        "intermediate" => Ok(Scenario::Intermediate(vec![78, 79, 81, 82])),
-        "no-response" => Ok(Scenario::NoResponse),
-        "corrupt-lrc" => number("un número").map(Scenario::CorruptLrc),
-        "require-close" => Ok(Scenario::RequireClose),
-        "drop-acks" => number("un número").map(Scenario::DropAcks),
-        "nak" => number("un número").map(Scenario::NakNext),
-        "voucher" => number("un número de líneas").map(Scenario::WithVoucher),
-        other => Err(format!("escenario desconocido: {other}")),
-    }
 }
 
 /// Prints the payloads exchanged: `<-` from the host, `->` from the POS.
