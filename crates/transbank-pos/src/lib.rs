@@ -34,10 +34,19 @@ mod client;
 mod codes;
 mod error;
 mod link;
-mod message;
+pub mod message;
 pub mod protocol;
 #[cfg(feature = "serial")]
 pub mod serial;
 pub mod transport;
 
+pub use codes::{IntermediateStatus, ResponseCode};
 pub use error::{Error, Result};
+pub use message::{
+    CloseResponse, DetailEntry, LoadKeysResponse, MultiCodeDetailEntry, MultiCodeSaleRequest,
+    MultiCodeSaleResponse, RefundResponse, SaleRequest, SaleResponse, SalesDetailMode,
+    TotalsResponse,
+};
+pub use protocol::types::{
+    Amount, CardBrand, CardType, CommerceCode, OperationNumber, PosDate, PosTime, Ticket,
+};

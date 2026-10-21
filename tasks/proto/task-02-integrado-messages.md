@@ -3,7 +3,7 @@
 | Atributo | Detalle |
 |:--|:--|
 | **ID** | `TASK-PROTO-02` |
-| **Estado** | ⬜ pendiente |
+| **Estado** | ✅ hecho |
 | **Rama** | `dev/proto-02-integrado-messages` |
 | **Depende de** | PROTO-01 |
 | **Restricciones** | PROTO-01, PROTO-05…08, API-02…06, SEC-03, LEG-02, QA-01 · `docs/protocol-spec.md` §4, §5, §6, §9 · `public-api.md` §2–§5 |
@@ -53,10 +53,23 @@ Structs de `public-api.md` §5 (Integrado) y parsers `pub fn parse_sale(payload:
 
 ## 5. Definición de terminado
 
-- [ ] RF-01…RF-05.
-- [ ] AGENTS.md §8 en verde.
-- [ ] Reporte completo (lista de nombres de variantes de `ResponseCode`).
+- [x] RF-01…RF-05.
+- [x] AGENTS.md §8 en verde.
+- [x] Reporte completo (lista de nombres de variantes de `ResponseCode`).
 
 ## Reporte
 
-_(pendiente)_
+Implementada por Claude (fallback: cuota Gemini en 0 %), 2026-10-21.
+
+- **Tipos** (`protocol/types.rs`, reexportados en la raíz): `Amount` (`Display` `$12.000`), `Ticket` (conserva mayúsculas/minúsculas, OPEN-04), `OperationNumber` (`FromStr` acepta 1–6 dígitos con ceros), `CommerceCode`, `PosDate` (valida días por mes y bisiestos), `PosTime`, `CardType`, `CardBrand` (`from_code`/`code`). Con `serde`: los de entrada usan `try_from`/`into` (deserializar valida); `CardType`/`CardBrand` se serializan como su código. Se agregaron `TryFrom<String>` y `From<T> for u32/String` (necesarios para `serde(try_from, into)`) y `CardType::from_code/code`, `CardBrand::from_code/code`, `MultiCodeSaleRequest::sale()/commerce_code()`.
+- **Códigos** (`codes.rs`): una macro genera el enum, `from_code`, `code` y `message` desde una sola tabla (56 códigos de §9, comentario de origen LEG-02). Variantes: `Approved` 0, `Rejected` 1, `HostNotResponding` 2, `ConnectionFailed` 3, `AlreadyRefunded` 4, `NoTransactionToRefund` 5, `CardNotSupported` 6, `CanceledAtPos` 7, `DebitCannotBeRefunded` 8, `CardReadError` 9, `AmountBelowMinimum` 10, `NoSale` 11, `TransactionNotSupported` 12, `MustClose` 13, `NoDialTone` 14, `BitmapFileNotFound` 15, `HostResponseFormatError` 16, `LastFourDigitsError` 17, `InvalidMenu` 18, `CardDistError` 19, `InvalidCard` 20, `RefundNotAllowed` 21, `Timeout` 22, `PrinterOutOfPaper` 24, `InvalidDate` 25, `MustLoadKeys` 26, `MustUpdate` 27, `InstallmentsNumberError` 60, `RequestBuildError` 61, `InternalPinpadError` 62, `HostResponseProcessingError` 65, `MaxSalesExceeded` 67, `AmountEntryError` 68, `TicketFormatError` 70, `PrintFieldLengthError` 71, `SaleAmountMustBePositive` 72, `TerminalIdNotConfigured` 73, `MustRunClose` 74, `NoCardsConfigured` 75, `MaxSalesReached` 76, `MustExecuteClose` 77, `WaitingForCard` 78, `ConfirmingAmount` 79, `InstallmentsSelection` 80, `RequestingPin` 81, `SendingToHost` 82, `CreditOrDebitSelection` 83, `OperateCard` 84, `SelectingInstallments` 85, `EnteringInstallments` 86, `ConfirmingInstallments` 87, `InstallmentsCountError` 88, `InitializationOk` 90, `Declined` 93, `ResponseProcessingError` 94, `TasaPrintError` 95, `Other(u16)`.
+- **Campos** (`protocol/fields.rs`, `pub(crate)`): struct `Fields` sobre el payload dividido; números solo con dígitos ASCII (`+5`, `-1`, `12a00` ⇒ `Parse`). Además de los helpers pedidos, `raw_at` lee un campo **sin recortar** (voucher), porque recortarlo rompería las líneas de 40 caracteres.
+- **Requests y payloads** (`message/integrado.rs`) y constantes `FC_*` en `protocol` (`FC_SALES_DETAIL` y `FC_LAST_SALE_RESPONSE` comparten `0260`).
+- **Respuestas** (`message/responses.rs`): parsers de §5–§6. Decisiones:
+  - `0271`/`0281`: el campo 19 se expone como `sale.voucher` en ambos (la spec lo llama filler en `0271`); `0291`: sin voucher, 19 = `change`, 20 = proveedor.
+  - `Debug` manual redacta `account_number`, `voucher` **y también `raw`** (el payload crudo contiene ambos): `<redacted N chars>`.
+  - `CloseResponse::voucher_lines()` además del de `SaleResponse`.
+  - `parse_intermediate`: código fuera de la tabla o no numérico ⇒ `Unknown(texto)`.
+- **Tests:** 85 en total en el workspace. Payloads exactos de cada request; validaciones de monto, ticket, operación y comercio; todos los campos de `0210`, `0261`, `0271` (rechazo `CanceledAtPos`), `0291`, `0710`, `1210`; `Parse` en `amount = "12a00"`; fecha `00-00-00` ⇒ `None`; `0331` conserva el cero; `UnexpectedResponse`; redacción en `Debug`; fixtures (`tests/fixtures/integrado.txt`, 8 tramas de §5); proptest con 1024 casos por parser.
+- **Sin verificar:** la serialización `serde` solo se compila (`--all-features`), no se prueba, porque `serde_json` no es dev-dependency permitida en `transbank-pos`.
+- AGENTS.md §8: los cinco comandos en verde; `validate.sh` OK.
