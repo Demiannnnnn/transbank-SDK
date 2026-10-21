@@ -39,7 +39,7 @@ tasks/
 | 2 | [PROTO-01](proto/task-01-framing.md) | LRC, codificador y decodificador de tramas | INFRA-01 | P0 | ✅ |
 | 3 | [PROTO-02](proto/task-02-integrado-messages.md) | Tipos, códigos, requests y respuestas del POS Integrado | PROTO-01 | P0 | ✅ |
 | 4 | [LINK-01](link/task-01-transport-and-link.md) | `Transport`, `Clock`, `MemoryTransport`, enlace ACK/NAK/timeouts | PROTO-02 | P0 | ✅ |
-| 5 | [SIM-01](sim/task-01-simulator.md) | Simulador sans-IO, escenarios, `SimTransport`, bin TCP | PROTO-02, LINK-01 | P0 | ⬜ |
+| 5 | [SIM-01](sim/task-01-simulator.md) | Simulador sans-IO, escenarios, `SimTransport`, bin TCP | PROTO-02, LINK-01 | P0 | ✅ |
 | 6 | [CLIENT-01](client/task-01-pos-integrado.md) | Cliente `PosIntegrado` + tests contra el simulador | PROTO-02, LINK-01, SIM-01 | P0 | ⬜ |
 | 7 | [SERIAL-01](serial/task-01-serial-and-tcp.md) | `SerialTransport`, `list_ports`, `autoconnect`, `TcpTransport` | LINK-01, CLIENT-01 | P1 | ⬜ |
 | 8 | [CLI-01](cli/task-01-cli.md) | CLI `tbk-pos` | CLIENT-01, SERIAL-01 | P1 | ⬜ |
