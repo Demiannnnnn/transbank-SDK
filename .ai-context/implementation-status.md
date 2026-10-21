@@ -2,12 +2,12 @@
 
 Qué es real hoy versus planificado. **Lo mantiene el orquestador** a partir de los reportes de las tareas validadas. No asumas que algo funciona porque existe un archivo para ello.
 
-Última actualización: 2026-10-21 — documentación base y plan de tareas en `develop-AGENTS`. **No hay código todavía.**
+Última actualización: 2026-10-21 — INFRA-01 integrada (esqueleto del workspace, sin lógica).
 
 | Área | Estado | Tarea | Notas |
 |:--|:--|:--|:--|
 | Documentación normativa (`AGENTS.md`, `.ai-context/`, `docs/`, `tasks/`) | ✅ | — | Protocolo derivado de los SDKs oficiales Node/.NET/C |
-| Workspace Cargo, lints, CI manual | ⬜ | INFRA-01 | |
+| Workspace Cargo, lints, CI manual | ✅ | INFRA-01 | Licencias por crate vía symlinks; CI sin ejecutar aún (solo push a main/develop o manual) |
 | LRC, tramas, decodificador | ⬜ | PROTO-01 | |
 | Tipos, códigos, mensajes Integrado | ⬜ | PROTO-02 | |
 | Transporte, reloj, enlace | ⬜ | LINK-01 | |
