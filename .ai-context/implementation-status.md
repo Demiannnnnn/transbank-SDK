@@ -2,14 +2,14 @@
 
 Qué es real hoy versus planificado. **Lo mantiene el orquestador** a partir de los reportes de las tareas validadas. No asumas que algo funciona porque existe un archivo para ello.
 
-Última actualización: 2026-10-21 — INFRA-01 y PROTO-01 integradas. `transbank-pos` ya se puede publicar como `0.0.1` de reserva (`docs/release.md` §0).
+Última actualización: 2026-10-21 — INFRA-01, PROTO-01 y PROTO-02 integradas. `transbank-pos` ya se puede publicar como `0.0.1` de reserva (`docs/release.md` §0).
 
 | Área | Estado | Tarea | Notas |
 |:--|:--|:--|:--|
 | Documentación normativa (`AGENTS.md`, `.ai-context/`, `docs/`, `tasks/`) | ✅ | — | Protocolo derivado de los SDKs oficiales Node/.NET/C |
 | Workspace Cargo, lints, CI manual | ✅ | INFRA-01 | Licencias por crate vía symlinks; CI sin ejecutar aún (solo push a main/develop o manual) |
 | LRC, tramas, decodificador | ✅ | PROTO-01 | Vectores §2.3 byte a byte; proptest de partición, ida y vuelta y bytes arbitrarios |
-| Tipos, códigos, mensajes Integrado | ⬜ | PROTO-02 | |
+| Tipos, códigos, mensajes Integrado | ✅ | PROTO-02 | 56 códigos; parsers con fixtures de §5; `Debug` redacta cuenta, voucher y raw |
 | Transporte, reloj, enlace | ⬜ | LINK-01 | |
 | Simulador + `tbk-pos-sim` | ⬜ | SIM-01 | |
 | Cliente `PosIntegrado` | ⬜ | CLIENT-01 | |
