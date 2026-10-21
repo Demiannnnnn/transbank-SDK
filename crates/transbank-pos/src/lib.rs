@@ -42,6 +42,7 @@ pub mod transport;
 
 pub use codes::{IntermediateStatus, ResponseCode};
 pub use error::{Error, Result};
+pub use link::{Link, LinkConfig};
 pub use message::{
     CloseResponse, DetailEntry, LoadKeysResponse, MultiCodeDetailEntry, MultiCodeSaleRequest,
     MultiCodeSaleResponse, RefundResponse, SaleRequest, SaleResponse, SalesDetailMode,
@@ -50,3 +51,4 @@ pub use message::{
 pub use protocol::types::{
     Amount, CardBrand, CardType, CommerceCode, OperationNumber, PosDate, PosTime, Ticket,
 };
+pub use transport::{Clock, SystemClock, Transport};
