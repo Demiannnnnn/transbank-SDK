@@ -1,0 +1,44 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Demiannnnnn/transbank-SDK"
+authors = ["Demian"]
+
+[workspace.dependencies]
+transbank-pos = { path = "crates/transbank-pos", version = "0.1.0", default-features = false }
+transbank-pos-sim = { path = "crates/transbank-pos-sim", version = "0.1.0" }
+thiserror = "2"
+serialport = "4"
+serde = { version = "1", features = ["derive"] }
+tracing = "0.1"
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+proptest = "1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+indexing_slicing = "deny"
+float_arithmetic = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+module_name_repetitions = "allow"

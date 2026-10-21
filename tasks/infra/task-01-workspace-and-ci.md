@@ -3,7 +3,7 @@
 | Atributo | Detalle |
 |:--|:--|
 | **ID** | `TASK-INFRA-01` |
-| **Estado** | ⬜ pendiente |
+| **Estado** | ✅ hecho |
 | **Rama** | `dev/infra-01-workspace` |
 | **Depende de** | — |
 | **Restricciones** | SAFE-01, LEG-01, LEG-03, LEG-04, API-08, QA-03 · `.ai-context/architecture.md` §2–§3, `conventions.md` §3–§4 |
@@ -48,11 +48,19 @@ El repo solo tiene documentación. Esta tarea crea el esqueleto del workspace de
 
 ## 5. Definición de terminado
 
-- [ ] RF-01…RF-03.
-- [ ] AGENTS.md §8 en verde (los cinco comandos).
-- [ ] `cargo package -p transbank-pos --allow-dirty --no-verify --list` incluye las licencias o el Reporte explica por qué no.
-- [ ] Reporte completo.
+- [x] RF-01…RF-03.
+- [x] AGENTS.md §8 en verde (los cinco comandos).
+- [x] `cargo package -p transbank-pos --allow-dirty --no-verify --list` incluye las licencias o el Reporte explica por qué no.
+- [x] Reporte completo.
 
 ## Reporte
 
-_(pendiente)_
+Implementada por Claude (fallback: cuota Gemini en 0 %), 2026-10-21.
+
+- Workspace `resolver = "3"` (resuelve respetando `rust-version`: `clap` 4.6.7 declara MSRV 1.85), lints de `conventions.md` §3 tal cual, `clippy.toml`, `rustfmt.toml`, `Cargo.lock` versionado.
+- `transbank-pos` también va en `[workspace.dependencies]` (`path` + `version`, `default-features = false`); la CLI lo pide con `default-features = true`. El simulador usa la versión sin `serial`.
+- Módulos de `architecture.md` §2 declarados con su `//!`: públicos `protocol`, `transport`, `serial` (cfg `serial`, archivo `src/serial.rs` porque la API lo expone como `transbank_pos::serial`); privados `error`, `codes`, `link`, `message`, `client` (sus ítems se reexportarán en la raíz).
+- Licencias por crate: `include` con `../..` no funciona en `cargo package`, así que cada crate tiene **symlinks** `LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE` → raíz. `cargo package -p transbank-pos --list` los incluye con su contenido. Ojo: en un checkout de Windows sin `core.symlinks` serían archivos de texto con la ruta; publicar desde macOS/Linux (`docs/release.md`).
+- CI: `workflow_dispatch` + push a `main`/`develop`; matriz ubuntu/macos/windows con los cinco comandos; job MSRV 1.85 que solo compila. No se pudo ejecutar localmente (no se corre Actions); el MSRV local no se verificó (host 1.99.1).
+- Tests: 4 (licencia y descripción "Unofficial" de `transbank-pos`; `tbk-pos --help` con "Unofficial" y `--version`).
+- AGENTS.md §8: los cinco comandos en verde; `validate.sh` OK.

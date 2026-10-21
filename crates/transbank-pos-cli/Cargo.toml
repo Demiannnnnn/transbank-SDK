@@ -1,0 +1,27 @@
+[package]
+name = "transbank-pos-cli"
+description = "Unofficial command-line tool (tbk-pos) to operate and diagnose Transbank POS terminals"
+readme = "README.md"
+keywords = ["transbank", "pos", "cli", "chile", "payments"]
+categories = ["command-line-utilities", "hardware-support"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "tbk-pos"
+path = "src/main.rs"
+
+[dependencies]
+transbank-pos = { workspace = true, default-features = true }
+transbank-pos-sim.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
