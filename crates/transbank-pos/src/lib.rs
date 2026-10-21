@@ -39,3 +39,5 @@ pub mod protocol;
 #[cfg(feature = "serial")]
 pub mod serial;
 pub mod transport;
+
+pub use error::{Error, Result};

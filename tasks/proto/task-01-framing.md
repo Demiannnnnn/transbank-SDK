@@ -3,7 +3,7 @@
 | Atributo | Detalle |
 |:--|:--|
 | **ID** | `TASK-PROTO-01` |
-| **Estado** | ⬜ pendiente |
+| **Estado** | ✅ hecho |
 | **Rama** | `dev/proto-01-framing` |
 | **Depende de** | INFRA-01 |
 | **Restricciones** | PROTO-01…04, SAFE-02, API-05, API-06, ADR-05, ADR-06 · `docs/protocol-spec.md` §2 |
@@ -71,10 +71,17 @@ Máquina de estados **exacta** de protocol-spec §2.4. `Garbage(n)` agrupa bytes
 
 ## 5. Definición de terminado
 
-- [ ] RF-01…RF-05.
-- [ ] AGENTS.md §8 en verde.
-- [ ] Reporte completo (incluye el número de tests y la decisión sobre `Garbage`).
+- [x] RF-01…RF-05.
+- [x] AGENTS.md §8 en verde.
+- [x] Reporte completo (incluye el número de tests y la decisión sobre `Garbage`).
 
 ## Reporte
 
-_(pendiente)_
+Implementada por Claude (fallback: cuota Gemini en 0 %), 2026-10-21.
+
+- `error.rs`: `Error`/`Result` completos según `public-api.md` §1, reexportados en la raíz; test de `Send + Sync + 'static`.
+- `protocol`: constantes, `lrc` (única implementación, PROTO-02), `encode_frame` (vacío/no imprimible ⇒ `InvalidArgument { field: "payload" }`; > 4096 ⇒ `Overflow`; se valida el largo antes que los bytes), `decode_latin1`, `FrameDecoder` + `LinkEvent`.
+- **Decisión `Garbage`:** los bytes descartados en `Idle` se acumulan y se emiten como un solo `Garbage(n)` **justo antes del siguiente `ACK`/`NAK`/`STX`**, nunca al final del trozo. Así los eventos son idénticos para cualquier partición (más estricto que "sumar lo mismo"; el proptest compara la lista completa). La basura final queda pendiente hasta un byte significativo o `reset()`. Un `STX` dentro de una trama emite `Garbage(1 + bytes de la trama abortada)` de inmediato.
+- `Overflow`: al llegar un byte de datos con 4096 ya acumulados; esos bytes no cuentan como `Garbage`, el resto de la trama sobredimensionada sí (llega en `Idle`). Una trama `STX ETX LRC` vacía se entrega como `Frame(vec![])` si su LRC es `0x03` (lo rechazará el enlace).
+- Tests: 31 en total en el workspace (24 nuevos: 19 unitarios en `protocol`/`error`, 3 proptest con 512 casos cada uno, doctests de `lrc`, `encode_frame`, `decode_latin1`, `FrameDecoder` y del módulo). Los 9 vectores de §2.3 se comprueban byte a byte en `encode_frame` y `lrc` y se decodifican como `Frame`.
+- AGENTS.md §8: los cinco comandos en verde; `validate.sh` OK.
