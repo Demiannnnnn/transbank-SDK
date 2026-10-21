@@ -2,7 +2,7 @@
 
 Qué es real hoy versus planificado. **Lo mantiene el orquestador** a partir de los reportes de las tareas validadas. No asumas que algo funciona porque existe un archivo para ello.
 
-Última actualización: 2026-10-21 — núcleo integrado hasta CLIENT-01 (falta SERIAL-01, CLI-01, DOCS-01).
+Última actualización: 2026-10-21 — núcleo integrado hasta SERIAL-01 (faltan CLI-01 y DOCS-01).
 
 | Área | Estado | Tarea | Notas |
 |:--|:--|:--|:--|
@@ -13,7 +13,7 @@ Qué es real hoy versus planificado. **Lo mantiene el orquestador** a partir de 
 | Transporte, reloj, enlace | ✅ | LINK-01 | ACK implícito si llega trama sin ACK; `BadLrc` al 4.º seguido; tiempo simulado |
 | Simulador + `tbk-pos-sim` | ✅ | SIM-01 | Integrado completo; Autoservicio responde 12 (pendiente AUTO-01) |
 | Cliente `PosIntegrado` | ✅ | CLIENT-01 | Todos los métodos salvo `open`/`autoconnect`; tests end-to-end contra el simulador |
-| Serie, TCP, autoconnect | ⬜ | SERIAL-01 | |
+| Serie, TCP, autoconnect | ✅ | SERIAL-01 | TCP probado end-to-end; serie solo compila y lógica pura (hardware en HW-01) |
 | CLI `tbk-pos` | ⬜ | CLI-01 | |
 | Rustdoc, READMEs, CHANGELOG, empaquetado | ⬜ | DOCS-01 | |
 | Validación con POS real | ⬜ | HW-01 (dueño) | Preguntas OPEN-01…06 de `docs/protocol-spec.md` §10 |
