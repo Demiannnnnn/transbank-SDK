@@ -1,12 +1,14 @@
 # Handoff — transbank-SDK
 
-Última actualización: 2026-10-21 — documentación base, spec del protocolo y plan de tareas integrados en `develop-AGENTS`. Nada en curso. Siguiente: lanzar INFRA-01 con agy.
+Última actualización: 2026-10-21 (noche) — núcleo completo en `develop-AGENTS` (INFRA-01 … DOCS-01), implementado por Claude con la cuota Gemini en 0 %. Nada en curso. Siguiente: HW-01 (dueño) y, si se quiere, publicar `transbank-pos 0.0.1` de reserva (`docs/release.md` §0); luego AUTO-01/ASYNC-01.
 
 ## 1. Estado
 
 - Repo creado por el dueño (`Demiannnnnn/transbank-SDK`, commit inicial en `main`). Ramas `develop` y `develop-AGENTS` creadas y publicadas el 2026-10-21; desde entonces el orquestador solo escribe en `develop-AGENTS` y `dev/*`.
 - `develop-AGENTS` tiene: `AGENTS.md`, `CLAUDE.md`, `README.md`, licencias (`LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`), `.ai-context/` completo, `docs/` (protocolo, simulador, hardware, publicación), `tasks/` (12 tareas) y `tools/orchestration/`.
-- Sin código. Orden: `tasks/README.md` §3.
+- Código: workspace de 3 crates (`transbank-pos`, `transbank-pos-sim`, `transbank-pos-cli`), 211 tests, los cinco comandos de AGENTS.md §8 en verde en macOS. Cada tarea tiene su Reporte con decisiones y desviaciones; resumen en `implementation-status.md`.
+- Ramas `dev/*` integradas (y publicadas): `infra-01-workspace`, `proto-01-framing`, `proto-02-integrado-messages`, `link-01-transport-and-link`, `sim-01-simulator`, `client-01-pos-integrado`, `serial-01-serial-and-tcp`, `cli-01-tbk-pos`, `docs-01-release-prep`. Se pueden borrar cuando el dueño integre `develop-AGENTS → develop`.
+- Worktree `../tbk-wt-pro` existe (último uso: DOCS-01); `../tbk-wt-plus` no se creó.
 
 ## 2. Origen y decisiones del dueño
 
@@ -32,9 +34,10 @@ Igual que en los otros repos del dueño (`CLAUDE.md`): Claude orquesta y no escr
 
 ## 5. Pendientes del dueño
 
-1. Integrar `develop-AGENTS → develop` cuando quiera.
-2. HW-01 cuando exista la CLI: probar con su POS Integrado (`docs/hardware-testing.md`).
-3. Autorizar REL-01 (crates.io) tras HW-01.
+1. Integrar `develop-AGENTS → develop` cuando quiera (dispara el CI en Linux/macOS/Windows).
+2. HW-01: probar con su POS Integrado siguiendo `docs/hardware-testing.md` (`cargo build -p transbank-pos-cli --release`).
+3. Opcional: publicar `transbank-pos 0.0.1` para reservar el nombre (`docs/release.md` §0; ya cumple el mínimo).
+4. Autorizar REL-01 (0.1.0 en crates.io) tras HW-01.
 
 ## 6. Lo que no está en el repo
 
