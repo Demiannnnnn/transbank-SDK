@@ -42,7 +42,7 @@ tasks/
 | 5 | [SIM-01](sim/task-01-simulator.md) | Simulador sans-IO, escenarios, `SimTransport`, bin TCP | PROTO-02, LINK-01 | P0 | ✅ |
 | 6 | [CLIENT-01](client/task-01-pos-integrado.md) | Cliente `PosIntegrado` + tests contra el simulador | PROTO-02, LINK-01, SIM-01 | P0 | ✅ |
 | 7 | [SERIAL-01](serial/task-01-serial-and-tcp.md) | `SerialTransport`, `list_ports`, `autoconnect`, `TcpTransport` | LINK-01, CLIENT-01 | P1 | ✅ |
-| 8 | [CLI-01](cli/task-01-cli.md) | CLI `tbk-pos` | CLIENT-01, SERIAL-01 | P1 | ⬜ |
+| 8 | [CLI-01](cli/task-01-cli.md) | CLI `tbk-pos` | CLIENT-01, SERIAL-01 | P1 | ✅ |
 | 9 | [DOCS-01](docs/task-01-docs-and-release-prep.md) | Rustdoc, ejemplos, READMEs de crates, CHANGELOG, `publish --dry-run` | CLI-01 | P1 | ⬜ |
 | 10 | [HW-01](hw/task-01-hardware-validation.md) | Validación con POS real (**dueño**) | CLI-01 | P0 para publicar | ⬜ |
 | 11 | [AUTO-01](auto/task-01-autoservicio.md) | POS Autoservicio (cliente + simulador + CLI) | CLIENT-01, SIM-01 | P2 | ⬜ |
