@@ -3,7 +3,7 @@
 | Atributo | Detalle |
 |:--|:--|
 | **ID** | `TASK-LINK-01` |
-| **Estado** | ⬜ pendiente |
+| **Estado** | ✅ hecho |
 | **Rama** | `dev/link-01-transport-and-link` |
 | **Depende de** | PROTO-02 (usa `IntermediateStatus`, `parse_intermediate` y los `FC_*`) |
 | **Restricciones** | LINK-01…07, SAFE-02, SAFE-03, SEC-02, QA-03, ADR-04, ADR-08, ADR-09 · `docs/protocol-spec.md` §3, §4.2, §8 · `public-api.md` §6–§7 · `security-model.md` §3 |
@@ -52,10 +52,30 @@ Trait `Transport` (con `discard_input` por defecto) e impls para `&mut T` y `Box
 
 ## 5. Definición de terminado
 
-- [ ] RF-01…RF-03.
-- [ ] AGENTS.md §8 en verde.
-- [ ] Reporte completo.
+- [x] RF-01…RF-03.
+- [x] AGENTS.md §8 en verde.
+- [x] Reporte completo.
 
 ## Reporte
 
-_(pendiente)_
+Implementada por Claude (fallback: cuota Gemini en 0 %), 2026-10-21.
+
+- `transport/mod.rs`: `Transport` (+ impls para `&mut T` y `Box<T>`), `Clock`, `SystemClock` (unidad; origen `Instant` en un `OnceLock` de proceso). Reexportados en la raíz con `Link` y `LinkConfig`.
+- `transport/memory.rs`:
+  - `ManualClock` usa `Arc<Mutex<Duration>>`: `AtomicU64::fetch_update` está obsoleto en Rust 1.99 y su reemplazo `try_update` no existe en 1.85.
+  - Además de lo pedido en `MemoryTransport`, agregué `then_reply_after(delay, bytes)`, para respuestas con retraso en tiempo simulado (lo necesita el test de `0900` cada 100 s), e `is_finished()`.
+  - El guion es estricto: una escritura después del fin del guion también da `Io(InvalidData)`, así que cada ACK del host se declara en el test.
+  - `discard_input` solo descarta lo que ya es legible, no las respuestas futuras del guion.
+- `link.rs`:
+  - **ACK implícito:** una trama válida (o con LRC malo) que llega mientras se espera el ACK se toma como ACK implícito y queda para la fase de respuesta. Así una venta cuyo ACK se perdió nunca se reenvía (LINK-03). El resto de los bytes se descarta (LINK-07).
+  - **Regla de `BadLrc`:** "más de `max_bad_lrc` seguidos". Con el valor por defecto, 3 NAK y al 4.º LRC malo, `Error::BadLrc { count: 4 }`.
+  - `request`: plazo total `response_timeout` sin reinicio por `0900`.
+  - **Plazo en `request_list`:** el plazo de `response_timeout` se cuenta **por trama**. Una lista larga no tiene plazo total.
+  - El fin de lista es la autorización vacía (campo 5). La cola consume tramas hasta `detail_tail` sin eventos; si en la cola llega una venta, se agrega.
+  - Límite de 10 000 tramas en total (ventas y terminadores).
+  - Feature `tracing`: `debug` sin payload ("frame sent", "ACK received", "NAK received", "bad LRC", "response timeout"…); `trace` con el payload redactado según el código de función (cuenta y voucher → `<redacted N>`; código desconocido ⇒ solo código y largo).
+- **Tests:**
+  - 17 de integración en `tests/link.rs`: todos los de la sección 4 de la tarea, más el ACK implícito.
+  - Unitarios de `MemoryTransport`/`ManualClock`, el redactor y los doctests.
+  - 114 tests en total en el workspace; la suite del enlace tarda 0,1 s reales.
+- AGENTS.md §8: los cinco comandos en verde; `validate.sh` OK.
