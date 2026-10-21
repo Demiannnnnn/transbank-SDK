@@ -2,6 +2,7 @@
 name = "transbank-pos-sim"
 description = "Unofficial Transbank POS simulator (library and TCP server) for testing transbank-pos without hardware"
 readme = "README.md"
+documentation = "https://docs.rs/transbank-pos-sim"
 keywords = ["transbank", "pos", "simulator", "testing", "chile"]
 categories = ["development-tools::testing", "simulation"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE"]
@@ -19,6 +20,9 @@ path = "src/main.rs"
 [dependencies]
 transbank-pos.workspace = true
 clap.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true

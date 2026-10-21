@@ -1,27 +1,49 @@
 //! # transbank-pos
 //!
-//! **Unofficial — not affiliated with Transbank S.A.** This crate is an independent
-//! implementation of the serial protocol used by Transbank POS terminals
-//! (POS Integrado and POS Autoservicio), written from the public sources of the
-//! official SDKs. "Transbank" is a trademark of its owner and is used here only to
-//! describe compatibility.
+//! **Unofficial — not affiliated with, endorsed or supported by Transbank S.A.**
+//! "Transbank" is a trademark of its owner and is used here only to describe
+//! compatibility. The protocol was derived from the public sources of the official
+//! SDKs (BSD-3-Clause, see `NOTICE`). Always validate with your own terminal before
+//! charging real money.
 //!
-//! The crate is layered so that every part can be tested without hardware:
+//! Rust SDK for the **Transbank POS terminals** of Chile connected by USB or serial
+//! port: framing (`STX payload ETX LRC`), link handling (ACK/NAK, retries, timeouts)
+//! and typed commands. Every layer can be tested without hardware.
 //!
-//! - [`protocol`]: sans-IO framing (`STX payload ETX LRC`), LRC and decoding.
-//! - [`transport`]: byte channels to the terminal (memory, TCP and, with the
-//!   `serial` feature, a serial port).
-//! - Link and clients (`Link`, `PosIntegrado`): ACK/NAK handling, timeouts and
-//!   typed commands.
+//! | Layer | What |
+//! |:--|:--|
+//! | [`protocol`] | sans-IO frame encoder/decoder, LRC, function codes |
+//! | [`message`] | request payloads and typed response parsers |
+//! | [`Link`] | ACK/NAK, retransmission of unacknowledged frames, timeouts |
+//! | [`PosIntegrado`] | the client: one method per operation |
+//! | [`transport`], `serial` | TCP, in-memory and (feature `serial`) serial port transports |
 //!
-//! The wire protocol is described in
-//! [`docs/protocol-spec.md`](https://github.com/Demiannnnnn/transbank-SDK/blob/develop/docs/protocol-spec.md).
+//! **Terminals:** POS Integrado (Verifone VX520/VX520c, Ingenico Desk 3500, as cited
+//! by the official SDKs). POS Autoservicio is planned. The crate has **not yet been
+//! validated against a real terminal**; see the open questions of the protocol
+//! specification.
 //!
-//! ## Example
+//! ## Quick start
 //!
-//! A sale against the simulator of the `transbank-pos-sim` crate. With a real
-//! terminal the transport is a serial port (`serial::SerialTransport`) or a TCP
-//! bridge, and the clock is the system one (`PosIntegrado::new`).
+//! With a real terminal:
+//!
+//! ```no_run
+//! use transbank_pos::{PosIntegrado, SaleRequest};
+//!
+//! let mut pos = PosIntegrado::open("/dev/ttyACM0")?; // COM3 on Windows
+//! pos.poll()?;
+//! let sale = pos.sale(&SaleRequest::new(12_000, "ABC123")?)?;
+//! if sale.is_approved() {
+//!     // authorization_code, operation_number, card_brand, installments…
+//! } else {
+//!     // a declined card is a response, not an error
+//!     let _reason = sale.response_code.message();
+//! }
+//! # Ok::<(), transbank_pos::Error>(())
+//! ```
+//!
+//! Without hardware, with the simulator of the `transbank-pos-sim` crate (or its
+//! `tbk-pos-sim` TCP server and [`transport::TcpTransport`]):
 //!
 //! ```
 //! use transbank_pos::{LinkConfig, PosIntegrado, SaleRequest, SalesDetailMode};
@@ -45,16 +67,51 @@
 //! # Ok::<(), transbank_pos::Error>(())
 //! ```
 //!
-//! ## Status
+//! ## Operations
 //!
-//! Early development: the API is not stable and the crate has not been validated
-//! against a real terminal yet.
+//! | Method | Command | Response |
+//! |:--|:--|:--|
+//! | [`poll`](PosIntegrado::poll) | `0100` | ACK |
+//! | [`load_keys`](PosIntegrado::load_keys) | `0800` | [`LoadKeysResponse`] |
+//! | [`sale`](PosIntegrado::sale), [`sale_with_status`](PosIntegrado::sale_with_status) | `0200` | [`SaleResponse`] |
+//! | [`multicode_sale`](PosIntegrado::multicode_sale) | `0270` | [`MultiCodeSaleResponse`] |
+//! | [`last_sale`](PosIntegrado::last_sale) | `0250` | [`SaleResponse`] |
+//! | [`multicode_last_sale`](PosIntegrado::multicode_last_sale) | `0280` | [`MultiCodeSaleResponse`] |
+//! | [`refund`](PosIntegrado::refund) | `1200` | [`RefundResponse`] |
+//! | [`totals`](PosIntegrado::totals) | `0700` | [`TotalsResponse`] |
+//! | [`sales_detail`](PosIntegrado::sales_detail) | `0260` | `Vec<`[`DetailEntry`]`>` |
+//! | [`multicode_sales_detail`](PosIntegrado::multicode_sales_detail) | `0290` | `Vec<`[`MultiCodeDetailEntry`]`>` |
+//! | [`close`](PosIntegrado::close) | `0500` | [`CloseResponse`] |
+//! | [`set_normal_mode`](PosIntegrado::set_normal_mode) | `0300` | ACK |
+//!
+//! `Err` is reserved for communication and protocol failures ([`Error`]); every
+//! response has `is_approved()` and a [`ResponseCode`] with the message of the POS.
+//!
+//! ## Avoiding double charges
+//!
+//! The link retransmits a frame only while the POS has **not** acknowledged it. Once
+//! a sale or refund is acknowledged it is never written again. If the response then
+//! does not arrive ([`Error::ResponseTimeout`], an I/O error), **the result is
+//! unknown**: the customer may have paid. Never resend the sale blindly; call
+//! [`PosIntegrado::last_sale`] and compare ticket and amount (see the example in
+//! [`PosIntegrado::sale`]).
 //!
 //! ## Features
 //!
-//! - `serial` (default): serial port transport, port listing and auto-detection.
-//! - `serde`: `Serialize`/`Deserialize` for requests, responses and domain types.
-//! - `tracing`: link-level `tracing` events (sensitive fields redacted).
+//! - `serial` (default): [`serial::SerialTransport`], port listing and
+//!   [`PosIntegrado::autoconnect`].
+//! - `serde`: `Serialize` for responses and domain types, `Deserialize` for requests.
+//! - `tracing`: link events on the `transbank_pos::link` target; payloads only at
+//!   `trace` level, with account numbers and vouchers redacted.
+//!
+//! The crate has no `unsafe` code, never panics on input from the POS, uses integer
+//! CLP amounts and spawns no threads.
+//!
+//! ## MSRV and license
+//!
+//! Rust 1.85 (edition 2024). Licensed under either of Apache License 2.0 or MIT
+//! license at your option. Protocol specification:
+//! [`docs/protocol-spec.md`](https://github.com/Demiannnnnn/transbank-SDK/blob/main/docs/protocol-spec.md).
 
 #![forbid(unsafe_code)]
 

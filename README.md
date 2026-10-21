@@ -4,9 +4,9 @@ SDK **no oficial** en Rust para comunicarse con los terminales **POS de Transban
 
 > ⚠️ **Proyecto no oficial.** No está afiliado, respaldado ni soportado por Transbank S.A. El protocolo se derivó de los [SDKs oficiales de Transbank](https://github.com/TransbankDevelopers) (BSD-3-Clause; ver [`NOTICE`](NOTICE)). Úsalo bajo tu responsabilidad y valida siempre con tu terminal antes de cobrar de verdad.
 
-> Estado: **en diseño.** Documentación y plan de tareas listos; la implementación avanza según [`tasks/README.md`](tasks/README.md). Detalle en [`.ai-context/implementation-status.md`](.ai-context/implementation-status.md). Aún no publicado en crates.io.
+> Estado: **implementado, sin validar con un POS real.** Protocolo, enlace, cliente `PosIntegrado`, transportes, simulador y CLI listos y probados contra el simulador; falta la validación con hardware (HW-01) y POS Autoservicio. Detalle en [`.ai-context/implementation-status.md`](.ai-context/implementation-status.md) y [`tasks/README.md`](tasks/README.md). Aún no publicado en crates.io.
 
-## Qué ofrece (objetivo v0.1)
+## Qué ofrece (v0.1)
 
 - **`transbank-pos`** — librería:
   - Protocolo *sans-IO*: codificador/decodificador de tramas, LRC, requests y parseo tipado de respuestas.
@@ -14,10 +14,10 @@ SDK **no oficial** en Rust para comunicarse con los terminales **POS de Transban
   - Cliente `PosIntegrado`: `poll`, `load_keys`, `sale`, `multicode_sale`, `last_sale`, `refund`, `totals`, `sales_detail`, `close`, `set_normal_mode`, con mensajes intermedios ("Esperando leer tarjeta", "Ingrese clave"…).
   - Transportes: puerto serie (`serialport`, feature `serial`), TCP y memoria (tests).
   - Montos en CLP enteros, tipos sin pánicos, `#![forbid(unsafe_code)]`.
-- **`transbank-pos-sim`** — POS simulado (aprobaciones, rechazos, timeouts, LRC corrupto…) en memoria o como servidor TCP (`tbk-pos-sim`).
+- **`transbank-pos-sim`** — POS Integrado simulado (aprobaciones, rechazos, timeouts, LRC corrupto…) en memoria o como servidor TCP (`tbk-pos-sim`).
 - **`transbank-pos-cli`** — CLI `tbk-pos` para operar un POS real o el simulador desde la terminal.
 
-## Ejemplo (API objetivo)
+## Ejemplo
 
 ```rust
 use transbank_pos::{PosIntegrado, SaleRequest, serial::SerialTransport};
