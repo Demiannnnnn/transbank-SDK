@@ -2,9 +2,10 @@
 name = "transbank-pos"
 description = "Unofficial Rust SDK for Transbank POS terminals (POS Integrado / Autoservicio) over serial or TCP"
 readme = "README.md"
+documentation = "https://docs.rs/transbank-pos"
 keywords = ["transbank", "pos", "chile", "payments", "serial"]
 categories = ["api-bindings", "hardware-support", "finance"]
-include = ["src/**", "tests/**", "examples/**", "Cargo.toml", "README.md", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE"]
+include = ["src/**", "examples/**", "Cargo.toml", "README.md", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

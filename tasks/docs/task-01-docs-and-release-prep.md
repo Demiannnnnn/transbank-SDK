@@ -3,7 +3,7 @@
 | Atributo | Detalle |
 |:--|:--|
 | **ID** | `TASK-DOCS-01` |
-| **Estado** | ⬜ pendiente |
+| **Estado** | ✅ hecho |
 | **Rama** | `dev/docs-01-release-prep` |
 | **Depende de** | CLI-01 |
 | **Restricciones** | API-06, LEG-01…04 · `docs/release.md` §1 · `conventions.md` §1, §7 |
@@ -42,11 +42,30 @@ Formato Keep a Changelog, sección `[Unreleased]` con todo lo de v0.1.0.
 
 ## 5. Definición de terminado
 
-- [ ] RF-01…RF-04.
-- [ ] AGENTS.md §8 en verde.
-- [ ] Salida de `cargo publish --dry-run`/`cargo package --list` en el Reporte.
-- [ ] Reporte completo.
+- [x] RF-01…RF-04.
+- [x] AGENTS.md §8 en verde.
+- [x] Salida de `cargo publish --dry-run`/`cargo package --list` en el Reporte.
+- [x] Reporte completo.
 
 ## Reporte
 
-_(pendiente)_
+Implementada por Claude (fallback: cuota Gemini en 0 %), 2026-10-21.
+
+- **Rustdoc** (`transbank-pos`, página de crate): aviso unofficial y marca, tabla de capas, terminales soportados con el estado "sin validar", quick start real (`no_run`) y contra el simulador (doctest), tabla de operaciones (método → comando → respuesta), "Avoiding double charges" (ADR-04), features, MSRV y licencia. Ya había ejemplos en `PosIntegrado`, `SaleRequest`, `ResponseCode`, `MemoryTransport` y `SimTransport`. `RUSTDOCFLAGS=-D warnings` en verde; 29 doctests en la lib. `[package.metadata.docs.rs] all-features = true` en la lib y el simulador.
+- **READMEs** de los tres crates en inglés: aviso, qué ofrece, instalación, ejemplo, features o uso, y enlaces.
+- **README raíz** (cambio mínimo, archivo del orquestador): "Estado: en diseño" pasa a "implementado, sin validar con un POS real"; "Ejemplo (API objetivo)" pasa a "Ejemplo"; se precisa que el simulador es de POS Integrado.
+- **`CHANGELOG.md`** (Keep a Changelog) con `[Unreleased]`.
+- **Licencias por crate:** los symlinks de INFRA-01 pasaron a **copias idénticas**, como pide la tarea, porque en Windows un symlink de git puede quedar como un archivo de texto. `tests/license_files.rs` verifica que los 9 archivos (3 por crate) sean idénticos byte a byte a los de la raíz.
+- **Metadatos:** se agrega `documentation` (docs.rs) en la lib y el simulador; el resto ya estaba (descripción "Unofficial…", licencia, repositorio, readme, keywords, categories, `rust-version`).
+- **`include` de cada paquete:**
+  - lib: `src`, `examples`, licencias, `NOTICE` y README; los ejemplos solo usan la lib.
+  - simulador y CLI: `src`, licencias, `NOTICE` y README.
+  - Los **tests quedan fuera** porque necesitan el simulador (dev-dependency por `path`, que se quita al publicar) y la raíz del workspace.
+- **`cargo publish --dry-run -p transbank-pos --allow-dirty`:** "Packaged 31 files, 198.3KiB (49.5KiB compressed)", "Verifying… Finished", "aborting upload due to dry run".
+  - **Desviación:** Cargo emite 7 avisos informativos `ignoring test <x> as tests/<x>.rs is not included in the published package`, consecuencia directa de excluir los tests.
+  - Para eliminarlos habría que incluir en el paquete tests que no compilan fuera del workspace. Preferí avisos informativos a un `.crate` con tests rotos; no hay otros warnings.
+- **`cargo package --list`:**
+  - `transbank-pos-sim`: `Cargo.lock`, `Cargo.toml`, `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE`, `README.md`, `src/{lib,main,request,scenario,simulator,tcp,transport}.rs`.
+  - `transbank-pos-cli`: `Cargo.lock`, `Cargo.toml`, licencias, `NOTICE`, `README.md`, `src/{format,json,main}.rs`.
+  - No se pudo hacer el dry-run de los dos porque `transbank-pos` todavía no está en crates.io, como prevé la tarea.
+- 211 tests en total en el workspace. AGENTS.md §8: los cinco comandos en verde; `validate.sh` OK. **No** se ejecutó `cargo publish` sin `--dry-run` ni se creó ningún tag.
