@@ -3,7 +3,7 @@
 | Atributo | Detalle |
 |:--|:--|
 | **ID** | `TASK-SIM-01` |
-| **Estado** | ⬜ pendiente |
+| **Estado** | ✅ hecho |
 | **Rama** | `dev/sim-01-simulator` |
 | **Depende de** | PROTO-02, LINK-01 |
 | **Restricciones** | PROTO-02, SEC-04, LEG-03, QA-03, SAFE-02 · `docs/simulator-spec.md` completo · `docs/protocol-spec.md` §3–§6 |
@@ -49,11 +49,40 @@ simulator-spec §4: implementa `transbank_pos::Transport` sobre un `PosSimulator
 
 ## 5. Definición de terminado
 
-- [ ] RF-01…RF-05.
-- [ ] AGENTS.md §8 en verde.
-- [ ] Prueba manual: `cargo run -p transbank-pos-sim -- --listen 127.0.0.1:7777` y un `nc`/script envía `0100`; resultado en el Reporte.
-- [ ] Reporte completo.
+- [x] RF-01…RF-05.
+- [x] AGENTS.md §8 en verde.
+- [x] Prueba manual: `cargo run -p transbank-pos-sim -- --listen 127.0.0.1:7777` y un `nc`/script envía `0100`; resultado en el Reporte.
+- [x] Reporte completo.
 
 ## Reporte
 
-_(pendiente)_
+Implementada por Claude (fallback: cuota Gemini en 0 %), 2026-10-21.
+
+- **Crate `transbank-pos-sim`:** `PosSimulator`, `TerminalKind`, `Scenario`, `SimulatedSale`, `SimTransport`, `TcpServer`, `parse_request`/`SimRequest`/`SaleArgs` y las constantes `SIM_COMMERCE_CODE`/`SIM_TERMINAL_ID`. Reutiliza `FrameDecoder` y `encode_frame` de `transbank_pos::protocol`, así que el LRC tiene una sola implementación.
+- **Enlace del lado POS:** responde ACK o NAK a lo que recibe. Tras enviar una trama, espera el ACK del host antes de mandar la siguiente (`0900` y detalle); ante un NAK retransmite hasta 3 veces y luego desiste. Un comando nuevo reemplaza lo que estuviera pendiente.
+- **Escenarios, con estas interpretaciones:**
+  - `Intermediate(codes)` solo se aplica si el host pidió `status = 1`, como hace un POS real. Si el host lo pide sin el escenario, se envían 78, 79, 81 y 82.
+  - `DropAcks` y `NakNext` no procesan el comando.
+  - `CorruptLrc(n)` cuenta transmisiones, incluidas las retransmisiones.
+  - `WrongFunctionCode` cambia la primera trama que no es `0900`.
+  - `NoResponse` y `WithVoucher` son persistentes.
+  - Sin `WithVoucher`, el voucher solo se incluye si el host lo pidió (3 líneas).
+- **Reglas de negocio (§3):**
+  - Monto < 50 ⇒ 10; > 999 999 999 ⇒ 68; ticket > 6 ⇒ 70; `RequireClose` ⇒ 74.
+  - Monto par ⇒ crédito `CR`/`VI` (3 cuotas desde 10 000); impar ⇒ débito `DB`/`DB`.
+  - Autorización determinista: `(op × 7919 + 104729) mod 10⁶`. Fecha y hora fijas `01012026`/`120000`, configurables con `with_clock_fixed`.
+  - La anulación aprobada consume un número de operación.
+  - Una request mal formada responde código 61.
+  - Autoservicio queda pendiente: ACK a `0100` y `{fc+10}|12` al resto.
+- **Bin `tbk-pos-sim`:**
+  - Flags de §5 más los escenarios `drop-acks:N`, `nak:N` y `voucher:N`; `--quiet`.
+  - Muestra `<-`/`->` con ACK/NAK; `--help` dice "Simulador NO oficial".
+  - Ctrl-C usa el manejo de señales por defecto: no se agregó ningún crate.
+  - `TcpServer::bind` rechaza direcciones que no son loopback sin `allow_remote` (SEC-04). `with_delay` usa `thread::sleep` solo en el servidor, nunca en tests.
+  - `serve_one_with(sim, observer)` existe para que el bin muestre lo intercambiado.
+- **Tests:** 31 de integración en `tests/simulator.rs` (cada fila de §3, cada escenario, las tres variantes de OPEN-01, `SimTransport` con el `Link` real, incluida una venta colgada que no se reenvía, TCP en `127.0.0.1:0` con hilo y `join`, rechazo de `0.0.0.0` y el `--help` del bin), más unitarios y doctests. 152 tests en total en el workspace.
+- **Prueba manual:** `tbk-pos-sim --listen 127.0.0.1:7777` con un cliente Python por TCP.
+  - `0100` ⇒ `06`.
+  - Venta `0200|000012000|ABC123||0|0` ⇒ `06` y luego `0210|00|597029414300|SIM00001|ABC123|112648|12000|03|4000|0037|000001|CR|01012026|0000000000000000037|VI|01012026|120000||0|`.
+  - La consola mostró `<- 0100`, `-> ACK`, `<- 0200|…`, `-> ACK`, `-> 0210|…`, `<- ACK` y `cliente desconectado`.
+- AGENTS.md §8: los cinco comandos en verde; `validate.sh` OK.
