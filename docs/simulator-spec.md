@@ -97,4 +97,4 @@ tbk-pos-sim [--listen 127.0.0.1:7777] [--allow-remote] [--kind integrado|autoser
 - Imprime en stdout cada payload recibido y enviado (`<-` / `->`), en español, con `--quiet` para silenciar.
 - `--help` dice "Simulador NO oficial de un POS de Transbank" (LEG-03).
 - Ctrl-C cierra limpio.
-- Puente con la CLI y apps: `TcpTransport::connect("127.0.0.1:7777", …)`. Para probar software que solo habla serie, el README explica `socat` (`socat pty,link=/tmp/ttyV0,raw tcp:127.0.0.1:7777`) en Linux/macOS — no se implementa PTY en Rust (requeriría `unsafe`/`nix`).
+- Puente con la CLI y apps: `TcpTransport::connect("127.0.0.1:7777", …)`. Para probar software que solo habla serie, el README explica `socat` (`socat pty,link=/tmp/ttyV0,raw tcp:127.0.0.1:7777`) **solo en Linux**: en macOS `serialport` fija los baudios con el ioctl `IOSSIOSPEED`, que un pseudo-terminal rechaza ("Not a typewriter", verificado 2026-10-22 con socat 1.8.1.3); ahí se usa `--tcp`. No se implementa PTY en Rust (requeriría `unsafe`/`nix`).

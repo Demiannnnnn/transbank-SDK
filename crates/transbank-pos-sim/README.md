@@ -37,7 +37,7 @@ let sale = pos.sale(&SaleRequest::new(12_000, "ABC123")?)?;
 assert!(!sale.is_approved()); // declined: a response, not an error
 ```
 
-To test software that only speaks serial, bridge a pseudo-terminal to the TCP server: `socat pty,link=/tmp/ttyV0,raw tcp:127.0.0.1:7777` (Linux/macOS).
+To test software that only speaks serial, bridge a pseudo-terminal to the TCP server on Linux: `socat pty,link=/tmp/ttyV0,raw tcp:127.0.0.1:7777`, then open `/tmp/ttyV0`. On macOS this does not work with `transbank-pos` (`serialport` sets the speed with the `IOSSIOSPEED` ioctl, which pseudo-terminals reject with "Not a typewriter"): connect over TCP instead (`tbk-pos --tcp 127.0.0.1:7777 …`).
 
 Project and specification: <https://github.com/Demiannnnnn/transbank-SDK>
 
