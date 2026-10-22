@@ -1,6 +1,6 @@
 # API pública — `transbank-pos` (contrato)
 
-Contrato con los usuarios del crate (API-01). Las firmas son normativas en nombres, parámetros, tipos de retorno y semántica; los detalles internos (campos privados, módulos internos) son libres. Cambiar algo de aquí requiere que la tarea lo diga. Versión objetivo: **0.1.0**.
+Contrato con los usuarios del crate (API-01). Las firmas son normativas en nombres, parámetros, tipos de retorno y semántica; los detalles internos (campos privados, módulos internos) son libres. Cambiar algo de aquí requiere que la tarea lo diga. Versión: **1.0.0** (decisión del dueño 2026-10-22).
 
 Re-exports en la raíz (`transbank_pos::`): todo lo marcado **[raíz]**.
 

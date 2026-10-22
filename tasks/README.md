@@ -54,7 +54,7 @@ tasks/
 
 | ID | Tarea | Notas |
 |:--|:--|:--|
-| REL-01 | Publicar en crates.io | Solo con autorización del dueño tras HW-01 (`docs/release.md`) |
+| REL-01 | Publicar en crates.io | El dueño publica 1.0.0 sin HW-01 (decisión 2026-10-22, `docs/release.md`) |
 | INT-01 | Integrar en `rework-sistema-facturacion` (app Tauri: cobro con POS en la venta) | Se especifica en ese repo; consume la versión publicada o `git` |
 | FUT-01 | Bluetooth / POS Android de Transbank | Investigar si hay protocolo documentado |
 

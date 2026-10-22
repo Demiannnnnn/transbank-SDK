@@ -9,13 +9,13 @@ Rust SDK for the **Transbank POS terminals** of Chile (POS Integrado: Verifone V
 - `PosIntegrado` client: poll, load keys, sale (with intermediate messages), multi-code sale, last sale, refund, totals, sales detail, close;
 - serial (feature `serial`, default), TCP and in-memory transports; a simulator in the [`transbank-pos-sim`](https://crates.io/crates/transbank-pos-sim) crate.
 
-**Status:** early development, **not yet validated against a real terminal**. The API may change before 0.1.0.
+**Status:** 1.0. Tested end to end against the bundled simulator (271 tests, property and mutation testing), but **never tested against a real Transbank terminal**. Reports from anyone with a POS are welcome.
 
 ## Installation
 
 ```toml
 [dependencies]
-transbank-pos = "0.1"
+transbank-pos = "1"
 ```
 
 On Linux, listing USB ports needs `libudev` (`libudev-dev` / `systemd-devel`) and access to the port (`dialout` or `uucp` group).

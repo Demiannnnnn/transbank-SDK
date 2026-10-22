@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -11,8 +11,8 @@ repository = "https://github.com/Demiannnnnn/transbank-SDK"
 authors = ["Demian"]
 
 [workspace.dependencies]
-transbank-pos = { path = "crates/transbank-pos", version = "0.1.0", default-features = false }
-transbank-pos-sim = { path = "crates/transbank-pos-sim", version = "0.1.0" }
+transbank-pos = { path = "crates/transbank-pos", version = "1.0.0", default-features = false }
+transbank-pos-sim = { path = "crates/transbank-pos-sim", version = "1.0.0" }
 thiserror = "2"
 serialport = "4"
 serde = { version = "1", features = ["derive"] }
