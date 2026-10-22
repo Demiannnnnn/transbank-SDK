@@ -208,3 +208,213 @@ fn trace_file_is_redacted() {
     assert!(trace.contains("<redacted 19>"), "{trace}");
     assert!(!trace.contains("0000000000000000074"), "{trace}");
 }
+
+#[test]
+fn help_and_version() {
+    let output = run(&["--help"]).unwrap();
+    assert_code(&output, 0);
+    let help = stdout(&output);
+    assert!(help.contains("NO oficial"), "{help}");
+    assert!(help.contains("Ejemplos:"), "{help}");
+    for command in [
+        "ports",
+        "autoconnect",
+        "sale",
+        "multicode-sale",
+        "last-sale",
+        "refund",
+        "detail",
+        "close",
+        "normal-mode",
+        "raw",
+    ] {
+        assert!(help.contains(command), "{command} missing in help");
+    }
+    let output = run(&["--version"]).unwrap();
+    assert_code(&output, 0);
+    assert_eq!(
+        stdout(&output),
+        format!("tbk-pos {}\n", env!("CARGO_PKG_VERSION"))
+    );
+}
+
+#[test]
+fn load_keys() {
+    let output = run(&["--sim", "load-keys"]).unwrap();
+    assert_code(&output, 0);
+    assert_eq!(
+        stdout(&output),
+        "[SIMULADOR] Llaves cargadas — comercio 597029414300 — terminal SIM00001\n"
+    );
+}
+
+#[test]
+fn multicode_sale() {
+    let output = run(&[
+        "--sim",
+        "multicode-sale",
+        "5000",
+        "M1",
+        "597012345678",
+        "--status",
+    ])
+    .unwrap();
+    assert_code(&output, 0);
+    let text = stdout(&output);
+    assert!(text.contains("… Esperando Leer Tarjeta"), "{text}");
+    assert!(text.contains("Venta multicódigo APROBADA"), "{text}");
+    assert!(text.ends_with("— comercio 597012345678\n"), "{text}");
+    assert_code(
+        &run(&["--sim", "multicode-sale", "5000", "M1", "12a"]).unwrap(),
+        64,
+    );
+}
+
+#[test]
+fn normal_mode_requires_confirmation() {
+    assert_code(&run(&["--sim", "normal-mode"]).unwrap(), 64);
+    let output = run(&["--sim", "normal-mode", "--yes"]).unwrap();
+    assert_code(&output, 0);
+    assert!(stdout(&output).contains("modo normal"));
+}
+
+#[test]
+fn refund_of_an_unknown_operation_exits_one() {
+    let output = run(&["--sim", "refund", "99", "--yes"]).unwrap();
+    assert_code(&output, 1);
+    assert!(stdout(&output).contains("05 No existe Transacción para Anular"));
+}
+
+#[test]
+fn require_close_scenario_exits_one() {
+    let output = run(&["--sim", "--scenario", "require-close", "sale", "1000", "T1"]).unwrap();
+    assert_code(&output, 1);
+    assert!(stdout(&output).contains("74 Debe Ejecutar CIERRE"));
+}
+
+#[test]
+fn communication_errors_exit_two() {
+    let output = run(&["--sim", "--scenario", "drop-acks:3", "poll"]).unwrap();
+    assert_code(&output, 2);
+    assert!(
+        stderr(&output).contains("did not acknowledge"),
+        "{}",
+        stderr(&output)
+    );
+
+    // Port 1 on loopback is closed: connection refused.
+    let output = run(&["--tcp", "127.0.0.1:1", "poll"]).unwrap();
+    assert_code(&output, 2);
+}
+
+#[test]
+fn invalid_scenario_is_usage_error() {
+    let output = run(&["--sim", "--scenario", "explode", "poll"]).unwrap();
+    assert_code(&output, 64);
+    assert!(stderr(&output).contains("escenario desconocido"));
+}
+
+#[test]
+fn json_status_messages_go_to_stderr() {
+    let output = run(&["--sim", "--json", "sale", "1000", "T1", "--status"]).unwrap();
+    assert_code(&output, 0);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("valid JSON");
+    assert_eq!(value["amount"], 1_000);
+    assert!(stderr(&output).contains("… Esperando Leer Tarjeta"));
+}
+
+#[test]
+fn json_lists_and_totals() {
+    let output = run(&["--sim", "--json", "detail"]).unwrap();
+    assert_code(&output, 0);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("valid JSON");
+    let entries = value.as_array().expect("array");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0]["ticket"], "DEMO01");
+    assert!(
+        entries[0]["account_number"]
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("<redacted")
+    );
+
+    let output = run(&["--sim", "--json", "totals"]).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("valid JSON");
+    assert_eq!(value["tx_count"], 1);
+    assert_eq!(value["tx_total"], 12_000);
+}
+
+#[test]
+fn json_show_voucher_keeps_the_voucher_only() {
+    let output = run(&[
+        "--sim",
+        "--json",
+        "--show-voucher",
+        "sale",
+        "1000",
+        "T1",
+        "--voucher",
+    ])
+    .unwrap();
+    assert_code(&output, 0);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("valid JSON");
+    assert!(
+        value["voucher"]
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("SIMULADOR 01")
+    );
+    assert!(
+        value["account_number"]
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("<redacted")
+    );
+}
+
+#[test]
+fn ports_json_is_an_array() {
+    let output = run(&["--json", "ports"]).unwrap();
+    assert_code(&output, 0);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("valid JSON");
+    assert!(value.is_array());
+}
+
+#[test]
+fn raw_variants() {
+    let output = run(&["--sim", "raw", "0100"]).unwrap();
+    assert_code(&output, 0);
+    assert_eq!(stdout(&output), "ACK recibido\n");
+
+    let output = run(&["--sim", "raw", "0700||", "--expect", "0710"]).unwrap();
+    assert_code(&output, 0);
+    assert_eq!(stdout(&output), "<- 0710|00|001|12000||\n");
+
+    // Node format of the sale (OPEN-01).
+    let output = run(&["--sim", "raw", "0200|000000100|T00003|||0"]).unwrap();
+    assert_code(&output, 0);
+    assert!(stdout(&output).starts_with("<- 0210|00|"));
+
+    assert_code(&run(&["--sim", "raw", "abc|"]).unwrap(), 64);
+    assert_code(&run(&["--sim", "raw", ""]).unwrap(), 64);
+    let output = run(&["--sim", "raw", "0250|", "--expect", "0810"]).unwrap();
+    assert_code(&output, 2);
+    assert!(stderr(&output).contains("expected response 0810"));
+}
+
+#[test]
+fn ack_timeout_flag_is_applied() {
+    // The simulator drops 3 ACKs: with the custom ACK timeout the error still
+    // reports the 3 attempts of the default `max_attempts`.
+    let output = run(&[
+        "--sim",
+        "--scenario",
+        "drop-acks:3",
+        "--ack-timeout-ms",
+        "1",
+        "poll",
+    ])
+    .unwrap();
+    assert_code(&output, 2);
+    assert!(stderr(&output).contains("after 3 attempts"));
+}
