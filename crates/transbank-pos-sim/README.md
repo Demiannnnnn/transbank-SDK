@@ -14,7 +14,7 @@ Deterministic: fixed date/time, authorization codes derived from the operation n
 
 ```toml
 [dev-dependencies]
-transbank-pos-sim = "0.1"
+transbank-pos-sim = "1"
 ```
 
 ```bash
