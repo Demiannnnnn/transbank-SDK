@@ -4,7 +4,9 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
-First version (0.1.0), not yet validated against a real terminal.
+## [1.0.0] - 2026-10-22
+
+First release. Tested against the bundled simulator only: **never tested against a real Transbank terminal** (see the open questions in `docs/protocol-spec.md` §10).
 
 ### Added
 

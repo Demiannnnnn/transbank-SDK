@@ -2,6 +2,10 @@
 
 **Solo con autorización explícita del dueño** y después de HW-01 (decisión del dueño 2026-10-03: "no publicar sin validar con un POS real en modo integrado"). Ningún agente ni el orquestador ejecuta `cargo publish` sin `--dry-run`, ni crea tags.
 
+## 1.0.0 (decisión del dueño, 2026-10-22)
+
+El dueño decidió publicar como **1.0.0 sin HW-01** (ya no tiene un caso de negocio que requiera el POS; el crate es de portafolio) e integrar a `main` por excepción. Los README y el CHANGELOG declaran que nunca se probó con un terminal real. Publica el dueño, en orden `transbank-pos` → `transbank-pos-sim` → `transbank-pos-cli`, desde `main`.
+
 ## 0. Versión preliminar `0.0.x` para reservar el nombre (dueño, 2026-10-21)
 
 Excepción a la regla de arriba, decidida por el dueño: se puede publicar **solo `transbank-pos`** como `0.0.x` antes de HW-01, para asegurar el nombre, siempre que tenga funcionalidad real y probada (la política de crates.io prohíbe crates que "existen solo para reservar un nombre"). Mínimo: INFRA-01 y PROTO-01 integradas (LRC, codificador y decodificador de tramas con tests).
