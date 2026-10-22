@@ -6,8 +6,8 @@
 
 - Repo creado por el dueño (`Demiannnnnn/transbank-SDK`, commit inicial en `main`). Ramas `develop` y `develop-AGENTS` creadas y publicadas el 2026-10-21; desde entonces el orquestador solo escribe en `develop-AGENTS` y `dev/*`.
 - `develop-AGENTS` tiene: `AGENTS.md`, `CLAUDE.md`, `README.md`, licencias (`LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`), `.ai-context/` completo, `docs/` (protocolo, simulador, hardware, publicación), `tasks/` (12 tareas) y `tools/orchestration/`.
-- Código: workspace de 3 crates (`transbank-pos`, `transbank-pos-sim`, `transbank-pos-cli`), 211 tests, los cinco comandos de AGENTS.md §8 en verde en macOS. Cada tarea tiene su Reporte con decisiones y desviaciones; resumen en `implementation-status.md`.
-- Ramas `dev/*` integradas (y publicadas): `infra-01-workspace`, `proto-01-framing`, `proto-02-integrado-messages`, `link-01-transport-and-link`, `sim-01-simulator`, `client-01-pos-integrado`, `serial-01-serial-and-tcp`, `cli-01-tbk-pos`, `docs-01-release-prep`. Se pueden borrar cuando el dueño integre `develop-AGENTS → develop`.
+- Código: workspace de 3 crates (`transbank-pos`, `transbank-pos-sim`, `transbank-pos-cli`), 271 tests (TEST-01: propiedades, `serde`, enlace, modelo, CLI; `cargo-mutants` sin escapes), los cinco comandos de AGENTS.md §8 en verde en macOS. Cada tarea tiene su Reporte con decisiones y desviaciones; resumen en `implementation-status.md`.
+- Ramas `dev/*` integradas (y publicadas): `infra-01-workspace`, `proto-01-framing`, `proto-02-integrado-messages`, `link-01-transport-and-link`, `sim-01-simulator`, `client-01-pos-integrado`, `serial-01-serial-and-tcp`, `cli-01-tbk-pos`, `docs-01-release-prep`, `test-01-hardening`. Se pueden borrar cuando el dueño integre `develop-AGENTS → develop`.
 - Worktree `../tbk-wt-pro` existe (último uso: DOCS-01); `../tbk-wt-plus` no se creó.
 
 ## 2. Origen y decisiones del dueño
