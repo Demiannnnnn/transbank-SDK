@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+mod autoservicio;
 mod format;
 mod json;
 
@@ -20,8 +21,8 @@ use transbank_pos::protocol::{FC_INTERMEDIATE, encode_frame};
 use transbank_pos::serial::{self, DEFAULT_BAUD_INTEGRADO, SerialTransport};
 use transbank_pos::transport::{ManualClock, TcpTransport};
 use transbank_pos::{
-    Clock, Error, IntermediateStatus, LinkConfig, MultiCodeSaleRequest, OperationNumber,
-    PosIntegrado, SaleRequest, SalesDetailMode, Transport,
+    Clock, Error, IntermediateStatus, Link, LinkConfig, MultiCodeSaleRequest, OperationNumber,
+    PosAutoservicio, PosIntegrado, SaleRequest, SalesDetailMode, Transport,
 };
 use transbank_pos_sim::{PosSimulator, Scenario, SimTransport, TerminalKind};
 
@@ -32,65 +33,70 @@ const EXAMPLES: &str = "Ejemplos:
   tbk-pos --tcp 127.0.0.1:7777 last-sale
   tbk-pos --sim --scenario reject:1 sale 1000 T1
   tbk-pos --port /dev/ttyACM0 --trace-file hw.log detail
+  tbk-pos --autoservicio --sim sale 1000 T1 --voucher
+  tbk-pos --autoservicio --sim init
 
 Herramienta NO oficial; no afiliada a Transbank.";
 
 /// Herramienta NO oficial; no afiliada a Transbank (Unofficial Transbank POS
 /// command-line tool — not affiliated with Transbank S.A.).
 ///
-/// Opera y diagnostica un POS Integrado por puerto serie, TCP o con el simulador en
-/// memoria (`--sim`).
+/// Opera y diagnostica un POS Integrado o Autoservicio por puerto serie, TCP o con
+/// el simulador en memoria (`--sim`).
 #[derive(Debug, Parser)]
 #[command(name = "tbk-pos", version, after_help = EXAMPLES)]
-struct Cli {
+pub(crate) struct Cli {
+    /// Opera en modo POS Autoservicio (19200 baudios por defecto).
+    #[arg(long, global = true)]
+    pub(crate) autoservicio: bool,
     /// Puerto serie del POS (COM3, /dev/ttyACM0, /dev/cu.usbmodem…).
     #[arg(long, conflicts_with_all = ["tcp", "sim"])]
-    port: Option<String>,
-    /// Baudios del puerto serie.
-    #[arg(long, default_value_t = DEFAULT_BAUD_INTEGRADO)]
-    baud: u32,
+    pub(crate) port: Option<String>,
+    /// Baudios del puerto serie (115200 Integrado, 19200 Autoservicio por defecto).
+    #[arg(long)]
+    pub(crate) baud: Option<u32>,
     /// Conexión TCP (puente serie-red o `tbk-pos-sim`), p. ej. 127.0.0.1:7777.
     #[arg(long, conflicts_with = "sim")]
-    tcp: Option<String>,
+    pub(crate) tcp: Option<String>,
     /// Simulador en memoria (arranca con una venta de demostración, operación 000001).
     #[arg(long)]
-    sim: bool,
+    pub(crate) sim: bool,
     /// Escenario del simulador (approve, reject:CÓDIGO, intermediate, no-response,
     /// corrupt-lrc:N, require-close, drop-acks:N, nak:N, voucher:N).
     #[arg(long, requires = "sim")]
-    scenario: Option<Scenario>,
+    pub(crate) scenario: Option<Scenario>,
     /// Espera del ACK, en milisegundos (por defecto 2000).
     #[arg(long, global = true)]
-    ack_timeout_ms: Option<u64>,
+    pub(crate) ack_timeout_ms: Option<u64>,
     /// Espera de la respuesta, en segundos (por defecto 150).
     #[arg(long, global = true)]
-    response_timeout_s: Option<u64>,
+    pub(crate) response_timeout_s: Option<u64>,
     /// Escribe la traza del enlace (redactada) en este archivo; filtro con `RUST_LOG`
     /// (por defecto `transbank_pos=trace`).
     #[arg(long, global = true)]
-    trace_file: Option<PathBuf>,
+    pub(crate) trace_file: Option<PathBuf>,
     #[command(flatten)]
-    flags: Flags,
+    pub(crate) flags: Flags,
     #[command(subcommand)]
-    command: Command,
+    pub(crate) command: Command,
 }
 
 /// Output and confirmation flags.
 #[derive(Debug, Args)]
-struct Flags {
+pub(crate) struct Flags {
     /// Salida JSON (campos sensibles redactados).
     #[arg(long, global = true)]
-    json: bool,
+    pub(crate) json: bool,
     /// Muestra el voucher (y lo incluye en el JSON).
     #[arg(long, global = true)]
-    show_voucher: bool,
+    pub(crate) show_voucher: bool,
     /// No pide confirmación en anulación, cierre y modo normal.
     #[arg(long, global = true)]
-    yes: bool,
+    pub(crate) yes: bool,
 }
 
 #[derive(Debug, Subcommand)]
-enum Command {
+pub(crate) enum Command {
     /// Lista los puertos serie del sistema.
     Ports,
     /// Busca el POS en los puertos serie (USB primero).
@@ -99,6 +105,10 @@ enum Command {
     Poll,
     /// Carga las llaves (0800).
     LoadKeys,
+    /// Inicialización del POS Autoservicio (0070).
+    Init,
+    /// Resultado de inicialización del POS Autoservicio (0080).
+    InitResult,
     /// Venta (0200).
     Sale {
         /// Monto en pesos (50 a 999999999).
@@ -128,12 +138,18 @@ enum Command {
         voucher: bool,
     },
     /// Última venta (0250).
-    LastSale,
+    LastSale {
+        /// Pide el voucher en la respuesta (Autoservicio).
+        #[arg(long)]
+        voucher: bool,
+    },
     /// Anula una venta de crédito por número de operación (1200).
     Refund {
         /// Número de operación de la venta.
         operation: String,
     },
+    /// Anula la última venta (Autoservicio, 1200).
+    RefundLast,
     /// Totales desde el último cierre (0700).
     Totals,
     /// Detalle de ventas (0260).
@@ -143,7 +159,11 @@ enum Command {
         print: bool,
     },
     /// Cierre del día (0500).
-    Close,
+    Close {
+        /// Pide el voucher en la respuesta (Autoservicio).
+        #[arg(long)]
+        voucher: bool,
+    },
     /// Saca al POS del modo integrado (0300).
     NormalMode,
     /// Envía un payload arbitrario e imprime la respuesta (diagnóstico).
@@ -157,7 +177,7 @@ enum Command {
 }
 
 /// Failure of a command, mapped to an exit code.
-enum Failure {
+pub(crate) enum Failure {
     /// Incorrect usage (64).
     Usage(String),
     /// Communication or protocol error (2), with an optional hint.
@@ -191,13 +211,13 @@ impl From<Error> for Failure {
 
 /// Result of a command that ran: approved/ok (0) or not approved (1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Outcome {
+pub(crate) enum Outcome {
     Ok,
     NotApproved,
 }
 
 impl Outcome {
-    fn from_approved(approved: bool) -> Self {
+    pub(crate) fn from_approved(approved: bool) -> Self {
         if approved {
             Self::Ok
         } else {
@@ -207,12 +227,12 @@ impl Outcome {
 }
 
 /// Output options shared by every command.
-struct Output {
-    json: bool,
-    show_voucher: bool,
+pub(crate) struct Output {
+    pub(crate) json: bool,
+    pub(crate) show_voucher: bool,
 }
 
-fn say(text: &str) -> Result<(), Failure> {
+pub(crate) fn say(text: &str) -> Result<(), Failure> {
     writeln!(std::io::stdout().lock(), "{text}")?;
     Ok(())
 }
@@ -220,7 +240,7 @@ fn say(text: &str) -> Result<(), Failure> {
 impl Output {
     /// Prints `value` as JSON (redacted) or the human `text`, plus the voucher lines
     /// with `--show-voucher`.
-    fn response(
+    pub(crate) fn response(
         &self,
         value: impl FnOnce() -> serde_json::Result<serde_json::Value>,
         text: &str,
@@ -241,7 +261,7 @@ impl Output {
     }
 
     /// Prints an intermediate status live (stderr with `--json`, to keep stdout valid).
-    fn status(&self, status: &IntermediateStatus) {
+    pub(crate) fn status(&self, status: &IntermediateStatus) {
         let text = format!("  … {}", status.message());
         let _ = if self.json {
             writeln!(std::io::stderr().lock(), "{text}")
@@ -262,18 +282,34 @@ fn link_config(cli: &Cli) -> LinkConfig {
     config
 }
 
+fn effective_baud(cli: &Cli) -> u32 {
+    let default = if cli.autoservicio {
+        serial::DEFAULT_BAUD_AUTOSERVICIO
+    } else {
+        DEFAULT_BAUD_INTEGRADO
+    };
+    cli.baud.unwrap_or(default)
+}
+
 /// The connection flags, to suggest the next command to the user.
 fn connection_flags(cli: &Cli) -> String {
+    let prefix = if cli.autoservicio {
+        "--autoservicio "
+    } else {
+        ""
+    };
     if let Some(port) = &cli.port {
-        format!("--port {port}")
+        format!("{prefix}--port {port}")
     } else if let Some(tcp) = &cli.tcp {
-        format!("--tcp {tcp}")
+        format!("{prefix}--tcp {tcp}")
+    } else if cli.autoservicio {
+        "--autoservicio --sim".to_owned()
     } else {
         "--sim".to_owned()
     }
 }
 
-fn confirm(cli: &Cli, action: &str) -> Result<bool, Failure> {
+pub(crate) fn confirm(cli: &Cli, action: &str) -> Result<bool, Failure> {
     if cli.flags.yes {
         return Ok(true);
     }
@@ -295,16 +331,26 @@ fn confirm(cli: &Cli, action: &str) -> Result<bool, Failure> {
 
 /// Simulator in memory with one demo sale (operation 000001), so that `last-sale`,
 /// `refund 1`, `detail` and `totals` have data in a fresh process.
-fn demo_simulator(scenario: Option<Scenario>) -> PosSimulator {
-    let mut sim = PosSimulator::new(TerminalKind::Integrado);
-    if let Ok(frame) = encode_frame("0200|000012000|DEMO01||0|0") {
+fn demo_simulator(scenario: Option<Scenario>, autoservicio: bool) -> PosSimulator {
+    let kind = if autoservicio {
+        TerminalKind::Autoservicio
+    } else {
+        TerminalKind::Integrado
+    };
+    let mut sim = PosSimulator::new(kind);
+    let demo_payload = if autoservicio {
+        "0200|000012000|DEMO01|0|0"
+    } else {
+        "0200|000012000|DEMO01||0|0"
+    };
+    if let Ok(frame) = encode_frame(demo_payload) {
         sim.feed(&frame);
         sim.feed(&[transbank_pos::protocol::ACK]);
     }
     sim.with_scenario(scenario.unwrap_or_default())
 }
 
-fn sale_unknown_hint(cli: &Cli) -> String {
+pub(crate) fn sale_unknown_hint(cli: &Cli) -> String {
     format!(
         "Resultado desconocido: NO repitas la venta; ejecuta `tbk-pos {} last-sale`",
         connection_flags(cli)
@@ -333,7 +379,7 @@ fn run_sale<T: Transport, C: Clock>(
 }
 
 /// After the sale was sent, a timeout or I/O error leaves the result unknown (ADR-04).
-fn unknown_result(cli: &Cli, err: Error) -> Failure {
+pub(crate) fn unknown_result(cli: &Cli, err: Error) -> Failure {
     match err {
         Error::ResponseTimeout { .. } | Error::Io(_) | Error::BadLrc { .. } => {
             Failure::Pos(err, Some(sale_unknown_hint(cli)))
@@ -364,8 +410,8 @@ fn run_multicode_sale<T: Transport, C: Clock>(
     Ok(Outcome::from_approved(sale.is_approved()))
 }
 
-fn run_raw<T: Transport, C: Clock>(
-    pos: &mut PosIntegrado<T, C>,
+pub(crate) fn run_raw<T: Transport, C: Clock>(
+    link: &mut Link<T, C>,
     payload: &str,
     expect: Option<&str>,
 ) -> Result<Outcome, Failure> {
@@ -373,10 +419,11 @@ fn run_raw<T: Transport, C: Clock>(
     let expected = match expect {
         Some(code) => code.to_owned(),
         None if matches!(function_code, "0100" | "0300" | "0070") => {
-            pos.link_mut().send_command(payload)?;
+            link.send_command(payload)?;
             say("ACK recibido")?;
             return Ok(Outcome::Ok);
         }
+        None if function_code == "0080" => "1080".to_owned(),
         None => function_code
             .parse::<u16>()
             .map(|code| format!("{:04}", code.saturating_add(10)))
@@ -384,7 +431,7 @@ fn run_raw<T: Transport, C: Clock>(
     };
     // The link API takes a `&'static str`; leaking one short string per process is fine.
     let expected: &'static str = Box::leak(expected.into_boxed_str());
-    let response = pos.link_mut().request(payload, expected, &mut |status| {
+    let response = link.request(payload, expected, &mut |status| {
         let _ = writeln!(
             std::io::stdout().lock(),
             "<- {FC_INTERMEDIATE} {}",
@@ -420,6 +467,69 @@ fn run_detail<T: Transport, C: Clock>(
     Ok(Outcome::Ok)
 }
 
+fn run_last_sale_integrado<T: Transport, C: Clock>(
+    out: &Output,
+    pos: &mut PosIntegrado<T, C>,
+    voucher: bool,
+) -> Result<Outcome, Failure> {
+    if voucher {
+        return Err(Failure::Usage(
+            "last-sale --voucher solo está disponible con --autoservicio".to_owned(),
+        ));
+    }
+    let sale = pos.last_sale()?;
+    out.response(
+        || serde_json::to_value(&sale),
+        &format::format_sale("Última venta", &sale),
+        sale.voucher_lines(),
+    )?;
+    Ok(Outcome::from_approved(sale.is_approved()))
+}
+
+fn run_refund_integrado<T: Transport, C: Clock>(
+    cli: &Cli,
+    out: &Output,
+    pos: &mut PosIntegrado<T, C>,
+    operation: &str,
+) -> Result<Outcome, Failure> {
+    let operation: OperationNumber = operation.parse()?;
+    if !confirm(cli, &format!("Anular la operación {:06}", operation.get()))? {
+        say("Cancelado")?;
+        return Ok(Outcome::NotApproved);
+    }
+    let refund = pos.refund(operation)?;
+    out.response(
+        || serde_json::to_value(&refund),
+        &format::format_refund(&refund),
+        None,
+    )?;
+    Ok(Outcome::from_approved(refund.is_approved()))
+}
+
+fn run_close_integrado<T: Transport, C: Clock>(
+    cli: &Cli,
+    out: &Output,
+    pos: &mut PosIntegrado<T, C>,
+    voucher: bool,
+) -> Result<Outcome, Failure> {
+    if voucher {
+        return Err(Failure::Usage(
+            "close --voucher solo está disponible con --autoservicio".to_owned(),
+        ));
+    }
+    if !confirm(cli, "Cerrar el día en el POS")? {
+        say("Cancelado")?;
+        return Ok(Outcome::NotApproved);
+    }
+    let close = pos.close()?;
+    out.response(
+        || serde_json::to_value(&close),
+        &format::format_close(&close),
+        close.voucher_lines(),
+    )?;
+    Ok(Outcome::from_approved(close.is_approved()))
+}
+
 fn run<T: Transport, C: Clock>(
     cli: &Cli,
     out: &Output,
@@ -443,6 +553,12 @@ fn run<T: Transport, C: Clock>(
             )?;
             Ok(Outcome::from_approved(keys.is_approved()))
         }
+        Command::Init => Err(Failure::Usage(
+            "init solo está disponible con --autoservicio".to_owned(),
+        )),
+        Command::InitResult => Err(Failure::Usage(
+            "init-result solo está disponible con --autoservicio".to_owned(),
+        )),
         Command::Sale {
             amount,
             ticket,
@@ -463,29 +579,11 @@ fn run<T: Transport, C: Clock>(
                 MultiCodeSaleRequest::new(*amount, ticket, commerce)?.with_voucher(*voucher);
             run_multicode_sale(cli, out, pos, &request, *status)
         }
-        Command::LastSale => {
-            let sale = pos.last_sale()?;
-            out.response(
-                || serde_json::to_value(&sale),
-                &format::format_sale("Última venta", &sale),
-                sale.voucher_lines(),
-            )?;
-            Ok(Outcome::from_approved(sale.is_approved()))
-        }
-        Command::Refund { operation } => {
-            let operation: OperationNumber = operation.parse()?;
-            if !confirm(cli, &format!("Anular la operación {:06}", operation.get()))? {
-                say("Cancelado")?;
-                return Ok(Outcome::NotApproved);
-            }
-            let refund = pos.refund(operation)?;
-            out.response(
-                || serde_json::to_value(&refund),
-                &format::format_refund(&refund),
-                None,
-            )?;
-            Ok(Outcome::from_approved(refund.is_approved()))
-        }
+        Command::LastSale { voucher } => run_last_sale_integrado(out, pos, *voucher),
+        Command::Refund { operation } => run_refund_integrado(cli, out, pos, operation),
+        Command::RefundLast => Err(Failure::Usage(
+            "refund-last solo está disponible con --autoservicio".to_owned(),
+        )),
         Command::Totals => {
             let totals = pos.totals()?;
             out.response(
@@ -496,19 +594,7 @@ fn run<T: Transport, C: Clock>(
             Ok(Outcome::from_approved(totals.is_approved()))
         }
         Command::Detail { print } => run_detail(out, pos, *print),
-        Command::Close => {
-            if !confirm(cli, "Cerrar el día en el POS")? {
-                say("Cancelado")?;
-                return Ok(Outcome::NotApproved);
-            }
-            let close = pos.close()?;
-            out.response(
-                || serde_json::to_value(&close),
-                &format::format_close(&close),
-                close.voucher_lines(),
-            )?;
-            Ok(Outcome::from_approved(close.is_approved()))
-        }
+        Command::Close { voucher } => run_close_integrado(cli, out, pos, *voucher),
         Command::NormalMode => {
             if !confirm(cli, "Sacar al POS del modo integrado")? {
                 say("Cancelado")?;
@@ -518,7 +604,7 @@ fn run<T: Transport, C: Clock>(
             say("POS en modo normal (reactívalo desde el menú del POS)")?;
             Ok(Outcome::Ok)
         }
-        Command::Raw { payload, expect } => run_raw(pos, payload, expect.as_deref()),
+        Command::Raw { payload, expect } => run_raw(pos.link_mut(), payload, expect.as_deref()),
     }
 }
 
@@ -539,7 +625,7 @@ fn run_ports(out: &Output) -> Result<Outcome, Failure> {
 }
 
 fn run_autoconnect(cli: &Cli, out: &Output) -> Result<Outcome, Failure> {
-    let Some((_, port)) = PosIntegrado::<SerialTransport>::autoconnect(cli.baud)? else {
+    let Some((_, port)) = PosIntegrado::<SerialTransport>::autoconnect(effective_baud(cli))? else {
         say("No se encontró ningún POS")?;
         return Ok(Outcome::NotApproved);
     };
@@ -555,15 +641,45 @@ fn dispatch(cli: &Cli, out: &Output) -> Result<Outcome, Failure> {
         Command::Autoconnect => return run_autoconnect(cli, out),
         _ => {}
     }
-    if let Some(port) = &cli.port {
-        let transport = SerialTransport::open(port, cli.baud)?;
+    if cli.autoservicio {
+        if let Some(port) = &cli.port {
+            let transport = SerialTransport::open(port, effective_baud(cli))?;
+            autoservicio::run_autoservicio(
+                cli,
+                out,
+                &mut PosAutoservicio::with_config(transport, config),
+            )
+        } else if let Some(address) = &cli.tcp {
+            let transport = TcpTransport::connect(address.as_str(), Duration::from_secs(5))?;
+            autoservicio::run_autoservicio(
+                cli,
+                out,
+                &mut PosAutoservicio::with_config(transport, config),
+            )
+        } else if cli.sim {
+            let clock = ManualClock::new();
+            let transport =
+                SimTransport::new(demo_simulator(cli.scenario.clone(), true), clock.clone());
+            autoservicio::run_autoservicio(
+                cli,
+                out,
+                &mut PosAutoservicio::with_clock(transport, config, clock),
+            )
+        } else {
+            Err(Failure::Usage(
+                "falta la conexión: usa --port <puerto>, --tcp <host:puerto> o --sim".to_owned(),
+            ))
+        }
+    } else if let Some(port) = &cli.port {
+        let transport = SerialTransport::open(port, effective_baud(cli))?;
         run(cli, out, &mut PosIntegrado::with_config(transport, config))
     } else if let Some(address) = &cli.tcp {
         let transport = TcpTransport::connect(address.as_str(), Duration::from_secs(5))?;
         run(cli, out, &mut PosIntegrado::with_config(transport, config))
     } else if cli.sim {
         let clock = ManualClock::new();
-        let transport = SimTransport::new(demo_simulator(cli.scenario.clone()), clock.clone());
+        let transport =
+            SimTransport::new(demo_simulator(cli.scenario.clone(), false), clock.clone());
         run(
             cli,
             out,
