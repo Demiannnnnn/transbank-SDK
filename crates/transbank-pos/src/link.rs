@@ -78,6 +78,14 @@ enum Received {
     Response(String),
 }
 
+/// Layout used to redact sensitive fields in traces (`security-model.md` §3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum TraceLayout {
+    #[default]
+    Integrado,
+    Autoservicio,
+}
+
 /// Low-level link with the POS: framing, ACK/NAK, retries and timeouts.
 ///
 /// The clients (`PosIntegrado`, `PosAutoservicio`) use it internally; it is public
@@ -108,6 +116,7 @@ pub struct Link<T: Transport, C: Clock = SystemClock> {
     decoder: FrameDecoder,
     events: VecDeque<LinkEvent>,
     scratch: Vec<LinkEvent>,
+    trace_layout: TraceLayout,
 }
 
 impl<T: Transport> Link<T> {
@@ -130,7 +139,12 @@ impl<T: Transport, C: Clock> Link<T, C> {
             decoder: FrameDecoder::new(),
             events: VecDeque::new(),
             scratch: Vec::new(),
+            trace_layout: TraceLayout::Integrado,
         }
+    }
+
+    pub(crate) fn set_trace_layout(&mut self, layout: TraceLayout) {
+        self.trace_layout = layout;
     }
 
     /// Sends a command and waits only for its ACK (`0100`, `0300`, `0260|0|`…).
@@ -324,7 +338,7 @@ impl<T: Transport, C: Clock> Link<T, C> {
                 Some(LinkEvent::Frame(payload)) => {
                     self.transport.write_all(&[ACK])?;
                     let text = decode_latin1(&payload);
-                    trace_payload(&text);
+                    trace_payload(&text, self.trace_layout);
                     let function_code = function_code(&text);
                     if function_code == FC_INTERMEDIATE {
                         return parse_intermediate(&text).map(Received::Status);
@@ -393,24 +407,32 @@ fn is_list_terminator(payload: &str) -> bool {
 }
 
 #[cfg(feature = "tracing")]
-fn trace_payload(payload: &str) {
-    tracing::trace!(target: "transbank_pos::link", payload = %redact(payload), "frame received");
+fn trace_payload(payload: &str, layout: TraceLayout) {
+    tracing::trace!(target: "transbank_pos::link", payload = %redact(payload, layout), "frame received");
 }
 
 #[cfg(not(feature = "tracing"))]
-fn trace_payload(_payload: &str) {}
+fn trace_payload(_payload: &str, _layout: TraceLayout) {}
 
 /// Replaces the account number and voucher fields by `<redacted N>` according to the
 /// layout of the function code (`security-model.md` §3).
 #[cfg(feature = "tracing")]
-fn redact(payload: &str) -> String {
-    let sensitive: &[usize] = match function_code(payload) {
-        "0210" | "0260" | "0271" | "0281" => &[13, 19],
-        "0291" => &[13],
-        "0261" => &[11],
-        "0510" => &[4],
-        "0710" | "0810" | "1210" | "0900" => &[],
-        other => return format!("<fc={other}, len={}>", payload.len()),
+fn redact(payload: &str, layout: TraceLayout) -> String {
+    let sensitive: &[usize] = match layout {
+        TraceLayout::Integrado => match function_code(payload) {
+            "0210" | "0260" | "0271" | "0281" => &[13, 19],
+            "0291" => &[13],
+            "0261" => &[11],
+            "0510" => &[4],
+            "0710" | "0810" | "1210" | "0900" => &[],
+            other => return format!("<fc={other}, len={}>", payload.len()),
+        },
+        TraceLayout::Autoservicio => match function_code(payload) {
+            "0210" | "0260" | "0271" => &[11, 15],
+            "0510" => &[4],
+            "0810" | "1210" | "0900" | "1080" => &[],
+            other => return format!("<fc={other}, len={}>", payload.len()),
+        },
     };
     payload
         .split('|')
@@ -428,17 +450,38 @@ fn redact(payload: &str) -> String {
 
 #[cfg(all(test, feature = "tracing"))]
 mod redact_tests {
-    use super::redact;
+    use super::{TraceLayout, redact};
 
     #[test]
     fn redacts_by_layout() {
         assert_eq!(
             redact(
-                "0210|00|1|T|t|a|1|0|0|1234|1|CR|01012025|ACCOUNT|MC|01012025|101010|1|0|VOUCHER"
+                "0210|00|1|T|t|a|1|0|0|1234|1|CR|01012025|ACCOUNT|MC|01012025|101010|1|0|VOUCHER",
+                TraceLayout::Integrado
             ),
             "0210|00|1|T|t|a|1|0|0|1234|1|CR|01012025|<redacted 7>|MC|01012025|101010|1|0|<redacted 7>"
         );
-        assert_eq!(redact("9999|secret"), "<fc=9999, len=11>");
-        assert_eq!(redact("0710|00|2|100"), "0710|00|2|100");
+        assert_eq!(
+            redact("9999|secret", TraceLayout::Integrado),
+            "<fc=9999, len=11>"
+        );
+        assert_eq!(
+            redact("0710|00|2|100", TraceLayout::Integrado),
+            "0710|00|2|100"
+        );
+
+        let fixture = "0210|00|597029414300|IM750164|123456|776549|10000|6590|58|CR|18032026|0000000000000000000|VI|18032026|123506|VOUCHER1234|03|03|3334|CUOTAS SIN INTERES";
+        assert_eq!(
+            redact(fixture, TraceLayout::Autoservicio),
+            "0210|00|597029414300|IM750164|123456|776549|10000|6590|58|CR|18032026|<redacted 19>|VI|18032026|123506|<redacted 11>|03|03|3334|CUOTAS SIN INTERES"
+        );
+        assert_eq!(
+            redact("1080|90|03022026|111543", TraceLayout::Autoservicio),
+            "1080|90|03022026|111543"
+        );
+        assert_eq!(
+            redact("1080|90|03022026|111543", TraceLayout::Integrado),
+            "<fc=1080, len=23>"
+        );
     }
 }
