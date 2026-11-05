@@ -15,11 +15,11 @@
 //! | [`protocol`] | sans-IO frame encoder/decoder, LRC, function codes |
 //! | [`message`] | request payloads and typed response parsers |
 //! | [`Link`] | ACK/NAK, retransmission of unacknowledged frames, timeouts |
-//! | [`PosIntegrado`] | the client: one method per operation |
+//! | [`PosIntegrado`], [`PosAutoservicio`] | the clients: one method per operation |
 //! | [`transport`], `serial` | TCP, in-memory and (feature `serial`) serial port transports |
 //!
 //! **Terminals:** POS Integrado (Verifone VX520/VX520c, Ingenico Desk 3500, as cited
-//! by the official SDKs). POS Autoservicio is planned. The crate has **not yet been
+//! by the official SDKs) and POS Autoservicio. The crate has **not yet been
 //! validated against a real terminal**; see the open questions of the protocol
 //! specification.
 //!
@@ -84,6 +84,20 @@
 //! | [`close`](PosIntegrado::close) | `0500` | [`CloseResponse`] |
 //! | [`set_normal_mode`](PosIntegrado::set_normal_mode) | `0300` | ACK |
 //!
+//! ### POS Autoservicio
+//!
+//! | Method | Command | Response |
+//! |:--|:--|:--|
+//! | [`poll`](PosAutoservicio::poll) | `0100` | ACK |
+//! | [`load_keys`](PosAutoservicio::load_keys) | `0800` | [`LoadKeysResponse`] |
+//! | [`initialize`](PosAutoservicio::initialize) | `0070` | ACK |
+//! | [`initialization_result`](PosAutoservicio::initialization_result) | `0080` | [`InitializationResponse`] |
+//! | [`sale`](PosAutoservicio::sale), [`sale_with_status`](PosAutoservicio::sale_with_status) | `0200` | [`SelfServiceSaleResponse`] |
+//! | [`multicode_sale`](PosAutoservicio::multicode_sale) | `0270` | [`SelfServiceMultiCodeSaleResponse`] |
+//! | [`last_sale`](PosAutoservicio::last_sale) | `0250` | [`SelfServiceSaleResponse`] |
+//! | [`refund_last`](PosAutoservicio::refund_last) | `1200` | [`RefundResponse`] |
+//! | [`close`](PosAutoservicio::close) | `0500` | [`CloseResponse`] |
+//!
 //! `Err` is reserved for communication and protocol failures ([`Error`]); every
 //! response has `is_approved()` and a [`ResponseCode`] with the message of the POS.
 //!
@@ -125,14 +139,14 @@ pub mod protocol;
 pub mod serial;
 pub mod transport;
 
-pub use client::PosIntegrado;
+pub use client::{PosAutoservicio, PosIntegrado};
 pub use codes::{IntermediateStatus, ResponseCode};
 pub use error::{Error, Result};
 pub use link::{Link, LinkConfig};
 pub use message::{
-    CloseResponse, DetailEntry, LoadKeysResponse, MultiCodeDetailEntry, MultiCodeSaleRequest,
-    MultiCodeSaleResponse, RefundResponse, SaleRequest, SaleResponse, SalesDetailMode,
-    TotalsResponse,
+    CloseResponse, DetailEntry, InitializationResponse, LoadKeysResponse, MultiCodeDetailEntry,
+    MultiCodeSaleRequest, MultiCodeSaleResponse, RefundResponse, SaleRequest, SaleResponse,
+    SalesDetailMode, SelfServiceMultiCodeSaleResponse, SelfServiceSaleResponse, TotalsResponse,
 };
 pub use protocol::types::{
     Amount, CardBrand, CardType, CommerceCode, OperationNumber, PosDate, PosTime, Ticket,

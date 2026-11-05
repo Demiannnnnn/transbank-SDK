@@ -2,11 +2,11 @@
 
 > **Unofficial — not affiliated with, endorsed or supported by Transbank S.A.** "Transbank" is a trademark of its owner and is used only to describe compatibility. The protocol was derived from the official SDKs (BSD-3-Clause, see [NOTICE](NOTICE)). Always validate with your own terminal before charging real money.
 
-Rust SDK for the **Transbank POS terminals** of Chile (POS Integrado: Verifone VX520/VX520c, Ingenico Desk 3500) connected by USB/serial port or through a TCP bridge:
+Rust SDK for the **Transbank POS terminals** of Chile (POS Integrado: Verifone VX520/VX520c, Ingenico Desk 3500; POS Autoservicio) connected by USB/serial port or through a TCP bridge:
 
 - sans-IO protocol core: frame encoder/decoder (`STX payload ETX LRC`), typed requests and responses;
 - link layer with ACK/NAK, retransmission of unacknowledged frames and configurable timeouts — an acknowledged sale is **never** resent;
-- `PosIntegrado` client: poll, load keys, sale (with intermediate messages), multi-code sale, last sale, refund, totals, sales detail, close;
+- `PosIntegrado` and `PosAutoservicio` clients (poll, load keys, initialize, sale, refund, close...);
 - serial (feature `serial`, default), TCP and in-memory transports; a simulator in the [`transbank-pos-sim`](https://crates.io/crates/transbank-pos-sim) crate.
 
 **Status:** 1.0. Tested end to end against the bundled simulator (271 tests, property and mutation testing), but **never tested against a real Transbank terminal**. Reports from anyone with a POS are welcome.
