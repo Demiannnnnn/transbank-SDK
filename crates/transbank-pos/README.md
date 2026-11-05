@@ -41,6 +41,19 @@ match pos.sale_with_status(&request, |status| eprintln!("POS: {}", status.messag
 
 Runnable examples (against `tbk-pos-sim` or a terminal): `cargo run --example sale` with `TBK_POS_TCP=127.0.0.1:7777` or `TBK_POS_PORT=/dev/ttyACM0`.
 
+### Async API (Tokio)
+
+With the optional `tokio` feature enabled, `transbank-pos` provides an asynchronous client and link layer (`transbank_pos::tokio`):
+
+```rust
+use transbank_pos::SaleRequest;
+use transbank_pos::tokio::AsyncPosIntegrado;
+
+let mut pos = AsyncPosIntegrado::connect_tcp("127.0.0.1:7777").await?;
+pos.poll().await?;
+let sale = pos.sale(&SaleRequest::new(12_000, "ABC123")?).await?;
+```
+
 ## Features
 
 | Feature | Default | Enables |
@@ -48,6 +61,8 @@ Runnable examples (against `tbk-pos-sim` or a terminal): `cargo run --example sa
 | `serial` | yes | `serial::SerialTransport`, `list_ports`, `PosIntegrado::open` / `autoconnect` |
 | `serde` | no | `Serialize` for responses, `Deserialize` for requests |
 | `tracing` | no | link events (`transbank_pos::link`), sensitive fields redacted |
+| `tokio` | no | Asynchronous API (`transbank_pos::tokio::{AsyncLink, AsyncPosIntegrado}`) |
+| `tokio-serial` | no | Asynchronous serial transport (`AsyncPosIntegrado::open_serial`) |
 
 MSRV: Rust 1.85. No `unsafe`, no panics on POS input, integer CLP amounts.
 
