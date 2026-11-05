@@ -810,3 +810,23 @@ fn main() -> ExitCode {
         Err(failure) => report(failure),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn effective_baud_modes_and_explicit() {
+        let cli = Cli::parse_from(["tbk-pos", "poll"]);
+        assert_eq!(effective_baud(&cli), 115_200);
+
+        let cli = Cli::parse_from(["tbk-pos", "--autoservicio", "poll"]);
+        assert_eq!(effective_baud(&cli), 19_200);
+
+        let cli = Cli::parse_from(["tbk-pos", "--baud", "9600", "poll"]);
+        assert_eq!(effective_baud(&cli), 9600);
+
+        let cli = Cli::parse_from(["tbk-pos", "--autoservicio", "--baud", "57600", "poll"]);
+        assert_eq!(effective_baud(&cli), 57_600);
+    }
+}

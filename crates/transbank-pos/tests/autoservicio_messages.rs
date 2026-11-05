@@ -32,10 +32,13 @@ fn payloads_and_frames_byte_by_byte() {
     let payload = self_service_sale_payload(&req, false);
     assert_eq!(payload, "0200|000010000|123456|1|0");
     let frame = encode_frame(&payload).unwrap();
-    assert_eq!(frame[0], 0x02);
-    assert_eq!(&frame[1..=payload.len()], payload.as_bytes());
-    assert_eq!(frame[payload.len() + 1], 0x03);
-    assert_eq!(frame.len(), payload.len() + 3);
+    assert_eq!(
+        frame,
+        [
+            0x02, b'0', b'2', b'0', b'0', b'|', b'0', b'0', b'0', b'0', b'1', b'0', b'0', b'0',
+            b'0', b'|', b'1', b'2', b'3', b'4', b'5', b'6', b'|', b'1', b'|', b'0', 0x03, 0x36,
+        ]
+    );
 
     // 0270
     let mreq = MultiCodeSaleRequest::new(10_000, "123456", "597012345678")
@@ -43,7 +46,15 @@ fn payloads_and_frames_byte_by_byte() {
         .with_voucher(false);
     let payload = self_service_multicode_sale_payload(&mreq, true);
     assert_eq!(payload, "0270|000010000|123456|0|1|597012345678");
-    assert!(encode_frame(&payload).is_ok());
+    let frame = encode_frame(&payload).unwrap();
+    assert_eq!(
+        frame,
+        [
+            0x02, b'0', b'2', b'7', b'0', b'|', b'0', b'0', b'0', b'0', b'1', b'0', b'0', b'0',
+            b'0', b'|', b'1', b'2', b'3', b'4', b'5', b'6', b'|', b'0', b'|', b'1', b'|', b'5',
+            b'9', b'7', b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', 0x03, 0x4E,
+        ]
+    );
 
     // 0250
     assert_eq!(self_service_last_sale_payload(false), "0250|0");

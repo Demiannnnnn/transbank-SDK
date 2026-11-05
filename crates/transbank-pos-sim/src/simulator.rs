@@ -715,10 +715,7 @@ impl PosSimulator {
         } else {
             0
         };
-        let mut fields = self.autoservicio_sale_fields("0260", sale, voucher_lines);
-        if let Some(code) = &sale.commerce_code {
-            fields.push(provider(code));
-        }
+        let fields = self.autoservicio_sale_fields("0260", sale, voucher_lines);
         fields.join("|")
     }
 

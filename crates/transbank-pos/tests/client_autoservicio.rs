@@ -243,17 +243,59 @@ fn close_clears_sales_and_last_sale_yields_11() {
 }
 
 #[test]
-fn link_retries_and_recovery_scenarios() {
-    let mut pos = pos_with(Scenario::NakNext(2)).0;
-    assert!(pos.poll().is_ok());
+fn corrupt_lrc_in_sale_recovers_with_nak_and_approves() {
+    let mut pos = pos_with(Scenario::CorruptLrc(2)).0;
+    let sale = pos.sale(&SaleRequest::new(10_000, "T1").unwrap()).unwrap();
+    assert!(sale.is_approved());
+}
 
+#[test]
+fn corrupt_lrc_in_refund_last_recovers_with_nak_and_approves() {
+    let mut pos = pos();
+    pos.sale(&SaleRequest::new(12_000, "ABC123").unwrap())
+        .unwrap();
     set_scenario(&mut pos, Scenario::CorruptLrc(2));
-    assert!(pos.poll().is_ok());
+    let refund = pos.refund_last().unwrap();
+    assert!(refund.is_approved());
+}
 
-    set_scenario(&mut pos, Scenario::DropAcks(2));
-    assert!(pos.poll().is_ok());
+#[test]
+fn corrupt_lrc_exhausted_in_sale_yields_bad_lrc_and_single_request() {
+    let mut pos = pos_with(Scenario::CorruptLrc(4)).0;
+    let err = pos
+        .sale(&SaleRequest::new(10_000, "T1").unwrap())
+        .unwrap_err();
+    assert!(matches!(err, Error::BadLrc { count: 4 }));
+    let sim = pos.into_inner().into_inner();
+    let sales_received = sim
+        .received_payloads()
+        .iter()
+        .filter(|p| p.starts_with("0200|"))
+        .count();
+    assert_eq!(sales_received, 1);
+}
 
-    set_scenario(&mut pos, Scenario::WrongFunctionCode("0270"));
+#[test]
+fn nak_next_in_sale_recovers_and_registers_single_sale() {
+    let mut pos = pos_with(Scenario::NakNext(2)).0;
+    let sale = pos.sale(&SaleRequest::new(10_000, "T1").unwrap()).unwrap();
+    assert!(sale.is_approved());
+    let sim = pos.into_inner().into_inner();
+    assert_eq!(sim.sales().len(), 1);
+}
+
+#[test]
+fn drop_acks_in_sale_recovers_and_registers_single_sale() {
+    let mut pos = pos_with(Scenario::DropAcks(2)).0;
+    let sale = pos.sale(&SaleRequest::new(10_000, "T1").unwrap()).unwrap();
+    assert!(sale.is_approved());
+    let sim = pos.into_inner().into_inner();
+    assert_eq!(sim.sales().len(), 1);
+}
+
+#[test]
+fn wrong_function_code_is_unexpected_response() {
+    let mut pos = pos_with(Scenario::WrongFunctionCode("0270")).0;
     let err = pos
         .sale(&SaleRequest::new(10_000, "T1").unwrap())
         .unwrap_err();

@@ -285,3 +285,78 @@ fn trace_file_redaction_autoservicio() {
     assert!(contents.contains("<redacted "));
     assert!(!contents.contains("SIMULADOR 01"));
 }
+
+#[test]
+fn raw_commands_init_and_result() {
+    let output = run(&["--autoservicio", "--sim", "raw", "0080"]).unwrap();
+    assert_code(&output, 0);
+    assert!(stdout(&output).contains("1080|90"));
+
+    let output = run(&["--autoservicio", "--sim", "raw", "0070"]).unwrap();
+    assert_code(&output, 0);
+    assert!(stdout(&output).contains("ACK"));
+}
+
+#[test]
+fn multicode_sale_approved_with_commerce() {
+    let output = run(&[
+        "--autoservicio",
+        "--sim",
+        "multicode-sale",
+        "1000",
+        "T1",
+        "597012345678",
+    ])
+    .unwrap();
+    assert_code(&output, 0);
+    let text = stdout(&output);
+    assert!(text.contains("Venta multicódigo APROBADA"));
+    assert!(text.contains("597012345678"));
+}
+
+#[test]
+fn last_sale_and_close_with_voucher_print_lines_of_forty_chars() {
+    let output = run(&["--autoservicio", "--sim", "last-sale", "--voucher"]).unwrap();
+    assert_code(&output, 0);
+    let text = stdout(&output);
+    let lines: Vec<&str> = text
+        .lines()
+        .filter(|line| line.starts_with("SIMULADOR "))
+        .collect();
+    assert_eq!(lines.len(), 3);
+    for line in lines {
+        assert_eq!(line.len(), 40, "line was: {line:?}");
+    }
+
+    let output = run(&["--autoservicio", "--sim", "close", "--voucher", "--yes"]).unwrap();
+    assert_code(&output, 0);
+    let text = stdout(&output);
+    let lines: Vec<&str> = text
+        .lines()
+        .filter(|line| line.starts_with("SIMULADOR "))
+        .collect();
+    assert_eq!(lines.len(), 3);
+    for line in lines {
+        assert_eq!(line.len(), 40, "line was: {line:?}");
+    }
+}
+
+#[test]
+fn corrupt_lrc_exits_two_with_autoservicio_hint() {
+    let output = run(&[
+        "--autoservicio",
+        "--sim",
+        "--scenario",
+        "corrupt-lrc:9",
+        "sale",
+        "1000",
+        "T1",
+    ])
+    .unwrap();
+    assert_code(&output, 2);
+    let err = stderr(&output);
+    assert!(
+        err.contains("--autoservicio"),
+        "stderr did not contain --autoservicio: {err}"
+    );
+}

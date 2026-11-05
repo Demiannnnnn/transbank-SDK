@@ -9,7 +9,7 @@ Rust SDK for the **Transbank POS terminals** of Chile (POS Integrado: Verifone V
 - `PosIntegrado` and `PosAutoservicio` clients (poll, load keys, initialize, sale, refund, close...);
 - serial (feature `serial`, default), TCP and in-memory transports; a simulator in the [`transbank-pos-sim`](https://crates.io/crates/transbank-pos-sim) crate.
 
-**Status:** 1.0. Tested end to end against the bundled simulator (271 tests, property and mutation testing), but **never tested against a real Transbank terminal**. Reports from anyone with a POS are welcome.
+**Status:** 1.0. Tested end to end against the bundled simulator (an extensive test suite (property and mutation testing of the 1.0 core)), but **never tested against a real Transbank terminal**. Reports from anyone with a POS are welcome.
 
 ## Installation
 

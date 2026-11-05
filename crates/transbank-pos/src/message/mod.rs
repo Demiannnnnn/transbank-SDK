@@ -2,8 +2,8 @@
 //!
 //! The clients use these functions internally; they are public for advanced users
 //! and for the simulator. Each `*_payload` function returns the payload exactly as
-//! `docs/protocol-spec.md` §4 defines it, and each `parse_*` function parses one
-//! response of §5–§6.
+//! `docs/protocol-spec.md` §4 and §7 define it, and each `parse_*` function parses one
+//! response of §5–§7 (POS Integrado and POS Autoservicio).
 
 mod autoservicio;
 mod integrado;

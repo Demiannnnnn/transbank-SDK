@@ -1,5 +1,5 @@
-//! Function codes (field 0) of the POS Integrado commands and responses
-//! (`docs/protocol-spec.md` §4–§6).
+//! Function codes (field 0) of the POS Integrado and POS Autoservicio commands and responses
+//! (`docs/protocol-spec.md` §4–§7).
 
 /// Poll (`0100`), answered only with ACK.
 pub const FC_POLL: &str = "0100";
