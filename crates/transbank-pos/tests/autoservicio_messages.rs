@@ -70,15 +70,18 @@ fn payloads_and_frames_byte_by_byte() {
     );
 }
 
-#[test]
-fn fixture_field_by_field() {
-    let lines: Vec<&str> = FIXTURES
+fn fixture_lines() -> Vec<&'static str> {
+    FIXTURES
         .lines()
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .collect();
+        .collect()
+}
+
+#[test]
+fn fixture_standard_sale() {
+    let lines = fixture_lines();
     assert_eq!(lines.len(), 4);
 
-    // Line 1: Standard Sale
     let sale = parse_self_service_sale(lines[0]).unwrap();
     assert_eq!(sale.function_code, "0210");
     assert_eq!(sale.response_code, ResponseCode::Approved);
@@ -118,8 +121,11 @@ fn fixture_field_by_field() {
         Some("CUOTAS SIN INTERES")
     );
     assert!(sale.is_approved());
+}
 
-    // Line 2: Initialization response
+#[test]
+fn fixture_initialization_response() {
+    let lines = fixture_lines();
     let init = parse_initialization(lines[1]).unwrap();
     assert_eq!(init.response_code, ResponseCode::InitializationOk);
     assert_eq!(
@@ -139,8 +145,11 @@ fn fixture_field_by_field() {
         })
     );
     assert!(init.is_approved());
+}
 
-    // Line 3: Sale with voucher and account_number
+#[test]
+fn fixture_sale_with_voucher_and_account_number() {
+    let lines = fixture_lines();
     let sale_v = parse_self_service_sale(lines[2]).unwrap();
     assert_eq!(
         sale_v.account_number.as_deref(),
@@ -150,8 +159,11 @@ fn fixture_field_by_field() {
     let voucher_lines = sale_v.voucher_lines().unwrap();
     assert_eq!(voucher_lines.len(), 3);
     assert_eq!(voucher_lines[0].len(), 40);
+}
 
-    // Line 4: MultiCode Sale
+#[test]
+fn fixture_multicode_sale() {
+    let lines = fixture_lines();
     let multi = parse_self_service_multicode_sale(lines[3]).unwrap();
     assert_eq!(multi.sale.amount, Some(10000));
     assert_eq!(
