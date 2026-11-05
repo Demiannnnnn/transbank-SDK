@@ -182,7 +182,10 @@ pub struct LoadKeysResponse { pub response_code, pub commerce_code, pub terminal
 pub struct CloseResponse { pub response_code, pub commerce_code, pub terminal_id, pub voucher: Option<String>, pub raw } // 0510
 pub struct TotalsResponse { pub response_code, pub tx_count: Option<u32>, pub tx_total: Option<u64>, pub raw }          // 0710
 pub struct RefundResponse { pub response_code, pub commerce_code, pub terminal_id, pub authorization_code, pub operation_number, pub raw } // 1210
-// Autoservicio (AUTO-01): SelfServiceSaleResponse (layout §7.1), InitializationResponse (1080)
+// Autoservicio (AUTO-01), en message/autoservicio.rs:
+// SelfServiceSaleResponse (layout §7.1; is_approved() solo con código 0),
+// SelfServiceMultiCodeSaleResponse { sale, commerce_provider_code },
+// InitializationResponse { response_code, date, time, raw } (1080; is_approved() solo con código 90)
 ```
 
 Todas tienen `is_approved()`.
@@ -295,6 +298,7 @@ impl PosIntegrado<serial::SerialTransport> {
 
 /// [raíz] (AUTO-01)
 pub struct PosAutoservicio<T: Transport, C: Clock = SystemClock> { … }
+// new, with_config, with_clock, link_mut, into_inner; open(path) con la feature serial (19200);
 // poll, load_keys, initialize, initialization_result, sale, sale_with_status, multicode_sale,
 // last_sale(voucher: bool), refund_last(), close(voucher: bool)
 ```

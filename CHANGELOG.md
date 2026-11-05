@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+Additive changes, compatible with 1.0.0. Tested against the bundled simulator only: **never tested against a real terminal**. Not released: no version bump, tag or publication yet (additive: next version would be a minor).
+
+### Added
+
+- `transbank-pos`: `PosAutoservicio` client (`poll`, `load_keys`, `initialize`, `initialization_result`, `sale`, `sale_with_status`, `multicode_sale`, `last_sale(voucher)`, `refund_last`, `close(voucher)`, and `open` with feature `serial`, 19200 baud); `SelfServiceSaleResponse`, `SelfServiceMultiCodeSaleResponse`, `InitializationResponse`, their payload builders and parsers; `FC_INITIALIZE`, `FC_INITIALIZATION_RESULT`, `FC_INITIALIZATION_RESPONSE`.
+- `transbank-pos-cli`: `--autoservicio` (19200 baud by default), `init`, `init-result`, `refund-last`, and `--voucher` on `last-sale` and `close` (Autoservicio only).
+
+### Changed
+
+- `transbank-pos-sim`: `TerminalKind::Autoservicio` now simulates the terminal (`docs/protocol-spec.md` §7) instead of answering code 12 to everything but `0100`. Commands outside §7 still answer code 12.
+- `transbank-pos-cli`: `--baud` has no fixed default; it depends on the terminal (115200 is unchanged for POS Integrado).
+
 ## [1.0.0] - 2026-10-22
 
 First release. Tested against the bundled simulator only: **never tested against a real Transbank terminal** (see the open questions in `docs/protocol-spec.md` §10).

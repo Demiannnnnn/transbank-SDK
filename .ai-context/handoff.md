@@ -1,6 +1,6 @@
 # Handoff — transbank-SDK
 
-Última actualización: 2026-10-21 (noche) — núcleo completo en `develop-AGENTS` (INFRA-01 … DOCS-01), implementado por Claude con la cuota Gemini en 0 %. Nada en curso. Siguiente: HW-01 (dueño) y, si se quiere, publicar `transbank-pos 0.0.1` de reserva (`docs/release.md` §0); luego AUTO-01/ASYNC-01.
+Última actualización: 2026-11-05 — AUTO-01 integrada en `develop-AGENTS`, sin publicar ni tag. ASYNC-01 en curso en `~/wt/tbk-async`. HW-01 sigue siendo del dueño. Worktree de integración: `~/wt/tbk-int` (reemplaza a `../tbk-wt-orch`).
 
 ## 1. Estado
 
@@ -34,6 +34,7 @@ Igual que en los otros repos del dueño (`CLAUDE.md`): Claude orquesta y no escr
 
 ## 5. Pendientes del dueño
 
+0. Revisar lo marcado en AUTO-01: OPEN-07 y OPEN-08 de `protocol-spec.md`; `SaleResponse::is_approved()` de Integrado acepta el código 90 (`implementation-status.md`); `CHANGELOG.md` [Unreleased] queda sin versión hasta que el dueño publique.
 1. Integrar `develop-AGENTS → develop` cuando quiera (dispara el CI en Linux/macOS/Windows).
 2. HW-01: probar con su POS Integrado siguiendo `docs/hardware-testing.md` (`cargo build -p transbank-pos-cli --release`).
 3. Opcional: publicar `transbank-pos 0.0.1` para reservar el nombre (`docs/release.md` §0; ya cumple el mínimo).
