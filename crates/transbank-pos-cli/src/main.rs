@@ -530,6 +530,87 @@ fn run_close_integrado<T: Transport, C: Clock>(
     Ok(Outcome::from_approved(close.is_approved()))
 }
 
+fn run_load_keys_integrado<T: Transport, C: Clock>(
+    out: &Output,
+    pos: &mut PosIntegrado<T, C>,
+) -> Result<Outcome, Failure> {
+    let keys = pos.load_keys()?;
+    out.response(
+        || serde_json::to_value(&keys),
+        &format::format_load_keys(&keys),
+        None,
+    )?;
+    Ok(Outcome::from_approved(keys.is_approved()))
+}
+
+fn run_totals_integrado<T: Transport, C: Clock>(
+    out: &Output,
+    pos: &mut PosIntegrado<T, C>,
+) -> Result<Outcome, Failure> {
+    let totals = pos.totals()?;
+    out.response(
+        || serde_json::to_value(&totals),
+        &format::format_totals(&totals),
+        None,
+    )?;
+    Ok(Outcome::from_approved(totals.is_approved()))
+}
+
+fn run_normal_mode_integrado<T: Transport, C: Clock>(
+    cli: &Cli,
+    pos: &mut PosIntegrado<T, C>,
+) -> Result<Outcome, Failure> {
+    if !confirm(cli, "Sacar al POS del modo integrado")? {
+        say("Cancelado")?;
+        return Ok(Outcome::NotApproved);
+    }
+    pos.set_normal_mode()?;
+    say("POS en modo normal (reactívalo desde el menú del POS)")?;
+    Ok(Outcome::Ok)
+}
+
+fn validate_command_support(cli: &Cli) -> Result<(), Failure> {
+    if cli.autoservicio {
+        match &cli.command {
+            Command::Refund { .. } => Err(Failure::Usage(
+                "el Autoservicio solo anula la última venta: usa refund-last".to_owned(),
+            )),
+            Command::Totals => Err(Failure::Usage(
+                "el Autoservicio no soporta totales".to_owned(),
+            )),
+            Command::Detail { .. } => Err(Failure::Usage(
+                "el Autoservicio no soporta detalle de ventas".to_owned(),
+            )),
+            Command::NormalMode => Err(Failure::Usage(
+                "el Autoservicio no soporta modo normal".to_owned(),
+            )),
+            Command::MulticodeSale { status: true, .. } => Err(Failure::Usage(
+                "el Autoservicio no soporta mensajes intermedios en venta multicódigo".to_owned(),
+            )),
+            _ => Ok(()),
+        }
+    } else {
+        match &cli.command {
+            Command::Init => Err(Failure::Usage(
+                "init solo está disponible con --autoservicio".to_owned(),
+            )),
+            Command::InitResult => Err(Failure::Usage(
+                "init-result solo está disponible con --autoservicio".to_owned(),
+            )),
+            Command::RefundLast => Err(Failure::Usage(
+                "refund-last solo está disponible con --autoservicio".to_owned(),
+            )),
+            Command::LastSale { voucher: true } => Err(Failure::Usage(
+                "last-sale --voucher solo está disponible con --autoservicio".to_owned(),
+            )),
+            Command::Close { voucher: true } => Err(Failure::Usage(
+                "close --voucher solo está disponible con --autoservicio".to_owned(),
+            )),
+            _ => Ok(()),
+        }
+    }
+}
+
 fn run<T: Transport, C: Clock>(
     cli: &Cli,
     out: &Output,
@@ -544,15 +625,7 @@ fn run<T: Transport, C: Clock>(
             say("POS conectado")?;
             Ok(Outcome::Ok)
         }
-        Command::LoadKeys => {
-            let keys = pos.load_keys()?;
-            out.response(
-                || serde_json::to_value(&keys),
-                &format::format_load_keys(&keys),
-                None,
-            )?;
-            Ok(Outcome::from_approved(keys.is_approved()))
-        }
+        Command::LoadKeys => run_load_keys_integrado(out, pos),
         Command::Init => Err(Failure::Usage(
             "init solo está disponible con --autoservicio".to_owned(),
         )),
@@ -584,26 +657,10 @@ fn run<T: Transport, C: Clock>(
         Command::RefundLast => Err(Failure::Usage(
             "refund-last solo está disponible con --autoservicio".to_owned(),
         )),
-        Command::Totals => {
-            let totals = pos.totals()?;
-            out.response(
-                || serde_json::to_value(&totals),
-                &format::format_totals(&totals),
-                None,
-            )?;
-            Ok(Outcome::from_approved(totals.is_approved()))
-        }
+        Command::Totals => run_totals_integrado(out, pos),
         Command::Detail { print } => run_detail(out, pos, *print),
         Command::Close { voucher } => run_close_integrado(cli, out, pos, *voucher),
-        Command::NormalMode => {
-            if !confirm(cli, "Sacar al POS del modo integrado")? {
-                say("Cancelado")?;
-                return Ok(Outcome::NotApproved);
-            }
-            pos.set_normal_mode()?;
-            say("POS en modo normal (reactívalo desde el menú del POS)")?;
-            Ok(Outcome::Ok)
-        }
+        Command::NormalMode => run_normal_mode_integrado(cli, pos),
         Command::Raw { payload, expect } => run_raw(pos.link_mut(), payload, expect.as_deref()),
     }
 }
@@ -635,6 +692,7 @@ fn run_autoconnect(cli: &Cli, out: &Output) -> Result<Outcome, Failure> {
 }
 
 fn dispatch(cli: &Cli, out: &Output) -> Result<Outcome, Failure> {
+    validate_command_support(cli)?;
     let config = link_config(cli);
     match &cli.command {
         Command::Ports => return run_ports(out),

@@ -80,6 +80,31 @@ fn run_multicode_sale_autoservicio<T: Transport, C: Clock>(
     Ok(Outcome::from_approved(sale.is_approved()))
 }
 
+#[derive(Clone, Copy)]
+struct MulticodeArgs<'a> {
+    amount: u32,
+    ticket: &'a str,
+    commerce: &'a str,
+    status: bool,
+    voucher: bool,
+}
+
+fn run_multicode_cmd_autoservicio<T: Transport, C: Clock>(
+    cli: &Cli,
+    out: &Output,
+    pos: &mut PosAutoservicio<T, C>,
+    args: MulticodeArgs<'_>,
+) -> Result<Outcome, Failure> {
+    if args.status {
+        return Err(Failure::Usage(
+            "el Autoservicio no soporta mensajes intermedios en venta multicódigo".to_owned(),
+        ));
+    }
+    let request = MultiCodeSaleRequest::new(args.amount, args.ticket, args.commerce)?
+        .with_voucher(args.voucher);
+    run_multicode_sale_autoservicio(cli, out, pos, &request)
+}
+
 fn run_last_sale_autoservicio<T: Transport, C: Clock>(
     out: &Output,
     pos: &mut PosAutoservicio<T, C>,
@@ -139,6 +164,38 @@ fn run_close_autoservicio<T: Transport, C: Clock>(
     Ok(Outcome::from_approved(close.is_approved()))
 }
 
+fn run_load_keys_autoservicio<T: Transport, C: Clock>(
+    out: &Output,
+    pos: &mut PosAutoservicio<T, C>,
+) -> Result<Outcome, Failure> {
+    let keys = pos.load_keys()?;
+    out.response(
+        || serde_json::to_value(&keys),
+        &format::format_load_keys(&keys),
+        None,
+    )?;
+    Ok(Outcome::from_approved(keys.is_approved()))
+}
+
+fn run_init_autoservicio<T: Transport, C: Clock>(
+    pos: &mut PosAutoservicio<T, C>,
+) -> Result<Outcome, Failure> {
+    pos.initialize()?;
+    say("Inicialización enviada (comprueba con init-result)")?;
+    Ok(Outcome::Ok)
+}
+
+fn run_init_result_autoservicio<T: Transport, C: Clock>(
+    cli: &Cli,
+    out: &Output,
+    pos: &mut PosAutoservicio<T, C>,
+) -> Result<Outcome, Failure> {
+    let result = pos.initialization_result()?;
+    let text = format::format_initialization(&result, cli.sim);
+    out.response(|| serde_json::to_value(&result), &text, None)?;
+    Ok(Outcome::from_approved(result.is_approved()))
+}
+
 pub(crate) fn run_autoservicio<T: Transport, C: Clock>(
     cli: &Cli,
     out: &Output,
@@ -153,26 +210,9 @@ pub(crate) fn run_autoservicio<T: Transport, C: Clock>(
             say("POS conectado")?;
             Ok(Outcome::Ok)
         }
-        Command::LoadKeys => {
-            let keys = pos.load_keys()?;
-            out.response(
-                || serde_json::to_value(&keys),
-                &format::format_load_keys(&keys),
-                None,
-            )?;
-            Ok(Outcome::from_approved(keys.is_approved()))
-        }
-        Command::Init => {
-            pos.initialize()?;
-            say("Inicialización enviada (comprueba con init-result)")?;
-            Ok(Outcome::Ok)
-        }
-        Command::InitResult => {
-            let result = pos.initialization_result()?;
-            let text = format::format_initialization(&result, cli.sim);
-            out.response(|| serde_json::to_value(&result), &text, None)?;
-            Ok(Outcome::from_approved(result.is_approved()))
-        }
+        Command::LoadKeys => run_load_keys_autoservicio(out, pos),
+        Command::Init => run_init_autoservicio(pos),
+        Command::InitResult => run_init_result_autoservicio(cli, out, pos),
         Command::Sale {
             amount,
             ticket,
@@ -188,17 +228,18 @@ pub(crate) fn run_autoservicio<T: Transport, C: Clock>(
             commerce,
             status,
             voucher,
-        } => {
-            if *status {
-                return Err(Failure::Usage(
-                    "el Autoservicio no soporta mensajes intermedios en venta multicódigo"
-                        .to_owned(),
-                ));
-            }
-            let request =
-                MultiCodeSaleRequest::new(*amount, ticket, commerce)?.with_voucher(*voucher);
-            run_multicode_sale_autoservicio(cli, out, pos, &request)
-        }
+        } => run_multicode_cmd_autoservicio(
+            cli,
+            out,
+            pos,
+            MulticodeArgs {
+                amount: *amount,
+                ticket,
+                commerce,
+                status: *status,
+                voucher: *voucher,
+            },
+        ),
         Command::LastSale { voucher } => run_last_sale_autoservicio(out, pos, *voucher),
         Command::Refund { .. } => Err(Failure::Usage(
             "el Autoservicio solo anula la última venta: usa refund-last".to_owned(),

@@ -219,18 +219,57 @@ fn no_response_suggests_autoservicio_and_last_sale() {
 }
 
 #[test]
-fn trace_file_redaction_autoservicio() {
-    let tmp_path =
-        std::env::temp_dir().join(format!("tbk-cli-auto-trace-{}.log", std::process::id()));
-    if tmp_path.exists() {
-        let _ = fs::remove_file(&tmp_path);
+fn voucher_and_show_voucher_does_not_duplicate_lines() {
+    let output = run(&[
+        "--autoservicio",
+        "--sim",
+        "--show-voucher",
+        "sale",
+        "1000",
+        "T1",
+        "--voucher",
+    ])
+    .unwrap();
+    assert_code(&output, 0);
+    let text = stdout(&output);
+    let count = text
+        .lines()
+        .filter(|line| line.starts_with("SIMULADOR "))
+        .count();
+    assert_eq!(count, 3, "voucher lines were duplicated: {text}");
+}
+
+#[test]
+fn exit_64_without_connection() {
+    let output = run(&["--autoservicio", "totals"]).unwrap();
+    assert_code(&output, 64);
+    assert!(stderr(&output).contains("el Autoservicio no soporta totales"));
+
+    let output = run(&["init"]).unwrap();
+    assert_code(&output, 64);
+    assert!(stderr(&output).contains("init solo está disponible con --autoservicio"));
+}
+
+struct TempFile(std::path::PathBuf);
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
     }
+}
+
+#[test]
+fn trace_file_redaction_autoservicio() {
+    let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("tbk-cli-auto-trace-{}.log", std::process::id()));
+    let temp = TempFile(path.clone());
+    let path_text = path.to_string_lossy().into_owned();
 
     let output = run(&[
         "--autoservicio",
         "--sim",
         "--trace-file",
-        tmp_path.to_str().unwrap(),
+        &path_text,
         "sale",
         "1000",
         "T1",
@@ -239,9 +278,9 @@ fn trace_file_redaction_autoservicio() {
     .unwrap();
     assert_code(&output, 0);
 
-    assert!(tmp_path.exists());
-    let contents = fs::read_to_string(&tmp_path).unwrap();
-    let _ = fs::remove_file(&tmp_path);
+    assert!(path.exists());
+    let contents = fs::read_to_string(&path).unwrap();
+    drop(temp);
 
     assert!(contents.contains("<redacted "));
     assert!(!contents.contains("SIMULADOR 01"));
