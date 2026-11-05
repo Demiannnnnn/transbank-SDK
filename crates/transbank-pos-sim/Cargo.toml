@@ -17,9 +17,16 @@ authors.workspace = true
 name = "tbk-pos-sim"
 path = "src/main.rs"
 
+[features]
+tokio = ["dep:tokio"]
+
 [dependencies]
 transbank-pos.workspace = true
 clap.workspace = true
+tokio = { workspace = true, optional = true, features = ["io-util"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["io-util", "macros", "test-util", "rt"] }
 
 [package.metadata.docs.rs]
 all-features = true
