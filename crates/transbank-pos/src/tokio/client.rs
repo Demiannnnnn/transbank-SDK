@@ -369,8 +369,10 @@ impl AsyncPosIntegrado<::tokio_serial::SerialStream> {
     ///
     /// # Errors
     ///
-    /// [`Error::Transport`] if opening or configuring the serial port fails.
+    /// [`Error::Transport`] if opening or configuring the serial port fails, or
+    /// if called outside an active Tokio runtime.
     pub fn open_serial(path: &str, baud_rate: u32) -> Result<Self> {
+        ::tokio::runtime::Handle::try_current().map_err(|err| Error::Transport(Box::new(err)))?;
         let builder = ::tokio_serial::new(path, baud_rate)
             .data_bits(::tokio_serial::DataBits::Eight)
             .flow_control(::tokio_serial::FlowControl::None)

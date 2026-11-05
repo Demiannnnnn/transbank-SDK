@@ -27,7 +27,7 @@ fn test_client() -> AsyncPosIntegrado<AsyncSimStream> {
     AsyncPosIntegrado::with_config(stream, config)
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn every_method_of_client() {
     let mut pos = test_client();
 
@@ -124,7 +124,7 @@ async fn every_method_of_client() {
     assert_eq!(stream.sim().sales().len(), 0);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn sale_approved_and_rejected() {
     let mut pos = test_client();
 
@@ -197,7 +197,7 @@ async fn refund_no_response_times_out_and_receives_exactly_one_frame() {
     assert_eq!(count_1200, 1);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn failure_scenarios() {
     let mut pos = test_client();
 
@@ -232,7 +232,7 @@ async fn failure_scenarios() {
     assert!(matches!(err, Error::UnexpectedResponse { .. }));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn sales_detail_with_and_without_sales() {
     let mut pos = test_client();
 
@@ -285,4 +285,67 @@ fn client_and_futures_are_send() {
         assert_send(&sale_status_fut);
         drop(sale_status_fut);
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn sale_corrupt_lrc_exhausted_fails_with_bad_lrc_and_single_request() {
+    let mut pos = test_client();
+    pos.link_mut()
+        .stream_mut()
+        .sim_mut()
+        .set_scenario(Scenario::CorruptLrc(4));
+    let req = SaleRequest::new(10_000, "BADLRC").unwrap();
+    let err = pos.sale(&req).await.unwrap_err();
+    assert!(matches!(err, Error::BadLrc { count: 4 }));
+
+    // LINK-03: exactly one 0200 was received by the simulator
+    let received = pos.link_mut().stream_mut().sim().received_payloads();
+    let count_0200 = received.iter().filter(|p| p.starts_with("0200")).count();
+    assert_eq!(count_0200, 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn sale_recovers_from_corrupt_lrc_and_approves() {
+    let mut pos = test_client();
+    pos.link_mut()
+        .stream_mut()
+        .sim_mut()
+        .set_scenario(Scenario::CorruptLrc(2));
+    let req = SaleRequest::new(10_000, "CORR02").unwrap();
+    let res = pos.sale(&req).await.unwrap();
+    assert!(res.is_approved());
+    assert_eq!(pos.link_mut().stream_mut().sim().sales().len(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn sale_recovers_from_nak_and_approves() {
+    let mut pos = test_client();
+    pos.link_mut()
+        .stream_mut()
+        .sim_mut()
+        .set_scenario(Scenario::NakNext(2));
+    let req = SaleRequest::new(10_000, "NAK002").unwrap();
+    let res = pos.sale(&req).await.unwrap();
+    assert!(res.is_approved());
+    assert_eq!(pos.link_mut().stream_mut().sim().sales().len(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn sale_recovers_from_drop_acks_and_approves() {
+    let mut pos = test_client();
+    pos.link_mut()
+        .stream_mut()
+        .sim_mut()
+        .set_scenario(Scenario::DropAcks(2));
+    let req = SaleRequest::new(10_000, "DROP02").unwrap();
+    let res = pos.sale(&req).await.unwrap();
+    assert!(res.is_approved());
+    assert_eq!(pos.link_mut().stream_mut().sim().sales().len(), 1);
+}
+
+#[cfg(feature = "tokio-serial")]
+#[test]
+fn open_serial_outside_runtime_returns_transport_error() {
+    let res = AsyncPosIntegrado::open_serial("/nonexistent/tbk-pos-test", 115_200);
+    assert!(matches!(res, Err(Error::Transport(_))));
 }

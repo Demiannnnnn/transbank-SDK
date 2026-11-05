@@ -14,6 +14,12 @@
 //! [`AsyncLink`] discards pending unread bytes and resets its internal decoder
 //! before each new command, so subsequent operations on the same link can proceed
 //! without reading stale responses from a canceled operation.
+//!
+//! # Runtime requirements
+//!
+//! All asynchronous operations on [`AsyncLink`] must run within a Tokio runtime with
+//! the time driver enabled (e.g. `enable_time()`), as well as the I/O driver enabled
+//! for network sockets or serial streams (e.g. `enable_all()`).
 
 use std::collections::VecDeque;
 use std::time::Duration;
@@ -50,6 +56,11 @@ enum Received {
 ///
 /// Implements framing, ACK/NAK, retransmissions, timeouts and multi-frame lists
 /// using the shared sans-IO exchange state machine without spawning background tasks.
+///
+/// # Runtime requirements
+///
+/// All operations must run within a Tokio runtime with the time driver enabled (and
+/// I/O driver enabled for `TcpStream` or serial ports, e.g. `enable_all()`).
 ///
 /// # Cancellation
 ///
@@ -140,7 +151,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
         let frame = encode_frame(payload)?;
         self.send_frame(&frame).await?;
         let waited = self.config.response_timeout;
-        let deadline = ::tokio::time::Instant::now() + waited;
+        let deadline = Self::deadline(waited);
         loop {
             match self.receive(expected, deadline, waited).await? {
                 Received::Status(status) => on_status(status),
@@ -171,7 +182,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
         let mut frames = 0usize;
         loop {
             let waited = self.config.response_timeout;
-            let deadline = ::tokio::time::Instant::now() + waited;
+            let deadline = Self::deadline(waited);
             let response = match self.receive(expected, deadline, waited).await? {
                 Received::Status(_) => continue,
                 Received::Response(response) => response,
@@ -224,7 +235,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
             self.stream.write_all(frame).await?;
             self.stream.flush().await?;
             link_debug!(len = frame.len(), attempt, "frame sent");
-            let ack_deadline = ::tokio::time::Instant::now() + self.config.ack_timeout;
+            let ack_deadline = Self::deadline(self.config.ack_timeout);
             loop {
                 let step = match ::tokio::time::timeout_at(ack_deadline, self.next_event()).await {
                     Ok(Ok(event)) => wait.on_event(event),
@@ -319,13 +330,13 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
     ) -> Result<()> {
         let mut wait = ListTailWait::new(expected, frames);
         loop {
-            let deadline = ::tokio::time::Instant::now() + self.config.detail_tail;
+            let deadline = Self::deadline(self.config.detail_tail);
             let event = match ::tokio::time::timeout_at(deadline, self.next_event()).await {
                 Ok(Ok(event)) => event,
                 Ok(Err(err)) => return Err(err),
                 Err(_) => return Ok(()),
             };
-            match wait.on_event(event)? {
+            match wait.on_event(event) {
                 ListTailStep::SendNak => {
                     self.stream.write_all(&[NAK]).await?;
                     self.stream.flush().await?;
@@ -338,6 +349,11 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
                 ListTailStep::AckTerminator => {
                     self.stream.write_all(&[ACK]).await?;
                     self.stream.flush().await?;
+                }
+                ListTailStep::AckError(err) => {
+                    self.stream.write_all(&[ACK]).await?;
+                    self.stream.flush().await?;
+                    return Err(err);
                 }
                 ListTailStep::Ignore => {}
             }
@@ -362,5 +378,11 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
             self.decoder.push(chunk, &mut self.scratch);
             self.events.extend(self.scratch.drain(..));
         }
+    }
+
+    fn deadline(timeout: Duration) -> ::tokio::time::Instant {
+        const THIRTY_YEARS: Duration = Duration::from_secs(30 * 365 * 86_400);
+        let bounded = timeout.min(THIRTY_YEARS);
+        ::tokio::time::Instant::now() + bounded
     }
 }

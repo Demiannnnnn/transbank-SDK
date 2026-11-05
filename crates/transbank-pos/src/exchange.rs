@@ -204,6 +204,9 @@ pub(crate) enum ListTailStep {
     AckEntry(String),
     /// Terminator received in tail: caller must send ACK.
     AckTerminator,
+    /// Valid frame received in tail that produced an error (e.g. frame limit or unexpected function).
+    /// Caller must send ACK and return this error.
+    AckError(Error),
     /// Event ignored.
     Ignore,
 }
@@ -222,24 +225,31 @@ impl ListTailWait {
     }
 
     /// Evaluates an incoming event in the detail tail.
-    pub(crate) fn on_event(&mut self, event: LinkEvent) -> Result<ListTailStep> {
+    pub(crate) fn on_event(&mut self, event: LinkEvent) -> ListTailStep {
         match event {
-            LinkEvent::BadLrc { .. } => Ok(ListTailStep::SendNak),
+            LinkEvent::BadLrc { .. } => ListTailStep::SendNak,
             LinkEvent::Frame(payload) => {
-                self.frames = count_frame(self.frames)?;
                 let text = decode_latin1(&payload);
-                let fc = function_code(&text);
-                if fc != self.expected {
-                    return Err(unexpected(self.expected, &text));
-                }
-                if is_list_terminator(&text) {
-                    Ok(ListTailStep::AckTerminator)
-                } else {
-                    Ok(ListTailStep::AckEntry(text))
+                match count_frame(self.frames) {
+                    Ok(next_frames) => {
+                        self.frames = next_frames;
+                        let fc = function_code(&text);
+                        if fc != self.expected {
+                            ListTailStep::AckError(unexpected(self.expected, &text))
+                        } else if is_list_terminator(&text) {
+                            ListTailStep::AckTerminator
+                        } else {
+                            ListTailStep::AckEntry(text)
+                        }
+                    }
+                    Err(err) => {
+                        self.frames = self.frames.saturating_add(1);
+                        ListTailStep::AckError(err)
+                    }
                 }
             }
             LinkEvent::Ack | LinkEvent::Nak | LinkEvent::Garbage(_) | LinkEvent::Overflow => {
-                Ok(ListTailStep::Ignore)
+                ListTailStep::Ignore
             }
         }
     }
@@ -329,21 +339,40 @@ mod tests {
                 expected: 0,
                 received: 1,
                 payload: vec![]
-            })
-            .unwrap(),
+            }),
             ListTailStep::SendNak
         ));
         assert!(matches!(
             tail.on_event(LinkEvent::Frame(
                 b"0261|00|5970|IT|ABC|757752|1000".to_vec()
-            ))
-            .unwrap(),
+            )),
             ListTailStep::AckEntry(_)
         ));
         assert!(matches!(
-            tail.on_event(LinkEvent::Frame(b"0261|00|5970|IT||||".to_vec()))
-                .unwrap(),
+            tail.on_event(LinkEvent::Frame(b"0261|00|5970|IT||||".to_vec())),
             ListTailStep::AckTerminator
+        ));
+    }
+
+    #[test]
+    fn list_tail_wait_unexpected_function_returns_ack_error() {
+        let mut tail = ListTailWait::new("0261", 0);
+        let step = tail.on_event(LinkEvent::Frame(b"0810|00|WRONG".to_vec()));
+        assert!(matches!(
+            step,
+            ListTailStep::AckError(Error::UnexpectedResponse { .. })
+        ));
+    }
+
+    #[test]
+    fn list_tail_wait_too_many_frames_returns_ack_error() {
+        let mut tail = ListTailWait::new("0261", 10_000);
+        let step = tail.on_event(LinkEvent::Frame(
+            b"0261|00|5970|IT|ABC|757752|1000".to_vec(),
+        ));
+        assert!(matches!(
+            step,
+            ListTailStep::AckError(Error::TooManyFrames { max: 10_000 })
         ));
     }
 }

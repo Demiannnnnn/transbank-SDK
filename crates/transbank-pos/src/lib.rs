@@ -118,8 +118,8 @@
 //! - `serde`: `Serialize` for responses and domain types, `Deserialize` for requests.
 //! - `tracing`: link events on the `transbank_pos::link` target; payloads only at
 //!   `trace` level, with account numbers and vouchers redacted.
-//! - `tokio`: asynchronous API under [`tokio`] module ([`tokio::AsyncLink`], [`tokio::AsyncPosIntegrado`]).
-//! - `tokio-serial`: asynchronous serial stream for [`tokio::AsyncPosIntegrado::open_serial`].
+//! - `tokio`: asynchronous API under `tokio` module (`tokio::AsyncLink`, `tokio::AsyncPosIntegrado`).
+//! - `tokio-serial`: asynchronous serial stream for `tokio::AsyncPosIntegrado::open_serial`.
 //!
 //! The crate has no `unsafe` code, never panics on input from the POS, uses integer
 //! CLP amounts and spawns no threads.

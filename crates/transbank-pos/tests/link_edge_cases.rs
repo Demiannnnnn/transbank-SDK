@@ -365,3 +365,66 @@ proptest! {
         prop_assert_eq!(statuses, 1);
     }
 }
+
+#[test]
+fn tail_unexpected_function_is_acknowledged() {
+    let clock = ManualClock::new();
+    let terminator = "0261|00|597029414300|IT750050||||||||||||||||";
+    let transport = MemoryTransport::new(clock.clone())
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK])
+        .then_reply(&frame(terminator))
+        .expect_write(&[ACK])
+        .then_reply(&frame("0810|00|SIM00001"))
+        .expect_write(&[ACK]);
+    let mut link = Link::with_clock(transport, LinkConfig::default(), clock);
+    let res = link.request_list("0260|1|", "0261");
+    assert!(matches!(res, Err(Error::UnexpectedResponse { .. })));
+    assert_eq!(link.transport_mut().written().last().copied(), Some(ACK));
+}
+
+#[test]
+fn tail_10001st_frame_ends_with_ack() {
+    let clock = ManualClock::new();
+    let mut transport = MemoryTransport::new(clock.clone())
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK]);
+    for n in 1..=9_999 {
+        let payload = format!(
+            "0261|00|597029414300|IT750050|{n:06}|{:06}|1000|9480|{n:06}|CR|22102025|0000000000000000000|MC|22102025|114016|1|0|0|0",
+            700_000 + n
+        );
+        transport = transport.then_reply(&frame(&payload)).expect_write(&[ACK]);
+    }
+    let terminator = "0261|00|597029414300|IT750050||||||||||||||||";
+    transport = transport
+        .then_reply(&frame(terminator))
+        .expect_write(&[ACK])
+        .then_reply(&frame(
+            "0261|00|597029414300|IT750050|010000|710000|1000|9480|010000|CR|22102025|0000000000000000000|MC|22102025|114016|1|0|0|0",
+        ))
+        .expect_write(&[ACK]);
+    let mut link = Link::with_clock(transport, LinkConfig::default(), clock);
+    let res = link.request_list("0260|1|", "0261");
+    assert!(matches!(res, Err(Error::TooManyFrames { max: 10_000 })));
+    assert_eq!(link.transport_mut().written().last().copied(), Some(ACK));
+}
+
+#[test]
+fn list_10001_frames_ends_with_ack() {
+    let clock = ManualClock::new();
+    let mut transport = MemoryTransport::new(clock.clone())
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK]);
+    for n in 1..=10_001 {
+        let payload = format!(
+            "0261|00|597029414300|IT750050|{n:06}|{:06}|1000|9480|{n:06}|CR|22102025|0000000000000000000|MC|22102025|114016|1|0|0|0",
+            700_000 + n
+        );
+        transport = transport.then_reply(&frame(&payload)).expect_write(&[ACK]);
+    }
+    let mut link = Link::with_clock(transport, LinkConfig::default(), clock);
+    let res = link.request_list("0260|1|", "0261");
+    assert!(matches!(res, Err(Error::TooManyFrames { max: 10_000 })));
+    assert_eq!(link.transport_mut().written().last().copied(), Some(ACK));
+}

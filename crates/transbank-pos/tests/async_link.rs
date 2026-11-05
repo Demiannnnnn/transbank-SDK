@@ -10,6 +10,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll, Waker};
 use std::time::Duration;
 
+use proptest::prelude::*;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use transbank_pos::protocol::{ACK, NAK, encode_frame, lrc};
@@ -833,12 +834,16 @@ async fn trap_a_eof_returns_unexpected_eof() {
 #[tokio::test(start_paused = true)]
 async fn trap_b_stale_input_drained_before_command() {
     let mut stream = AsyncScriptedStream::new()
-        .expect_write(&frame("0100"))
-        .then_reply(&[ACK]);
-    // Stale bytes pushed before the operation:
-    stream.push_incoming(b"stale trash 0210|00");
+        .expect_write(&frame("0800"))
+        .then_reply(&[ACK])
+        .then_reply(&frame("0810|00|NEW"))
+        .expect_write(&[ACK]);
+    // Stale valid frame in incoming before the command starts:
+    stream.push_incoming(&frame("0810|00|OLD"));
     let mut l = link(stream);
-    l.send_command("0100").await.unwrap();
+    let mut ignore = |_| {};
+    let res = l.request("0800", "0810", &mut ignore).await.unwrap();
+    assert_eq!(res, "0810|00|NEW");
     assert!(l.stream_mut().is_finished());
 }
 
@@ -907,13 +912,145 @@ async fn trap_f_external_cancellation_leaves_link_usable() {
     let timeout_res = tokio::time::timeout(Duration::from_millis(50), sale_fut).await;
     assert!(timeout_res.is_err());
 
-    // Next operation on the same link: poll
+    // Deliver late sale response into incoming:
+    l.stream_mut().push_incoming(&frame(SALE_RESPONSE));
+
+    // Next operation on the same link: totals
     l.stream_mut()
         .script
-        .push_back(ScriptItem::Write(frame("0100")));
+        .push_back(ScriptItem::Write(frame("0700||")));
     l.stream_mut()
         .script
         .push_back(ScriptItem::Reply(Duration::ZERO, vec![ACK]));
-    l.send_command("0100").await.unwrap();
+    l.stream_mut().script.push_back(ScriptItem::Reply(
+        Duration::ZERO,
+        frame("0710|00|003|45000||"),
+    ));
+    l.stream_mut()
+        .script
+        .push_back(ScriptItem::Write(vec![ACK]));
+
+    let res = l.request("0700||", "0710", &mut ignore).await.unwrap();
+    assert_eq!(res, "0710|00|003|45000||");
     assert!(l.stream_mut().is_finished());
+}
+
+#[tokio::test(start_paused = true)]
+async fn request_list_with_duration_max_does_not_panic() {
+    let mut config = LinkConfig::default();
+    config.ack_timeout = Duration::MAX;
+    config.response_timeout = Duration::MAX;
+    config.detail_tail = Duration::MAX;
+    let stream = AsyncScriptedStream::new()
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK])
+        .then_reply(&frame("0261|00|597029414300|IT750050|ABC123|757752|12000"))
+        .expect_write(&[ACK])
+        .then_reply(&frame("0261|00|597029414300|IT750050|ABC123||"))
+        .expect_write(&[ACK]);
+    let mut l = AsyncLink::new(stream, config);
+    let list = l.request_list("0260|1|", "0261").await.unwrap();
+    assert_eq!(list.len(), 1);
+    assert!(l.stream_mut().is_finished());
+}
+
+#[tokio::test(start_paused = true)]
+async fn tail_unexpected_function_is_acknowledged() {
+    let terminator = "0261|00|597029414300|IT750050||||||||||||||||";
+    let stream = AsyncScriptedStream::new()
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK])
+        .then_reply(&frame(terminator))
+        .expect_write(&[ACK])
+        .then_reply(&frame("0810|00|SIM00001"))
+        .expect_write(&[ACK]);
+    let mut l = link(stream);
+    let res = l.request_list("0260|1|", "0261").await;
+    assert!(matches!(res, Err(Error::UnexpectedResponse { .. })));
+    assert!(l.stream_mut().is_finished());
+}
+
+#[tokio::test(start_paused = true)]
+async fn tail_10001st_frame_ends_with_ack() {
+    let mut stream = AsyncScriptedStream::new()
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK]);
+    for n in 1..=9_999 {
+        let payload = format!(
+            "0261|00|597029414300|IT750050|{n:06}|{:06}|1000|9480|{n:06}|CR|22102025|0000000000000000000|MC|22102025|114016|1|0|0|0",
+            700_000 + n
+        );
+        stream = stream.then_reply(&frame(&payload)).expect_write(&[ACK]);
+    }
+    let terminator = "0261|00|597029414300|IT750050||||||||||||||||";
+    stream = stream
+        .then_reply(&frame(terminator))
+        .expect_write(&[ACK])
+        .then_reply(&frame(
+            "0261|00|597029414300|IT750050|010000|710000|1000|9480|010000|CR|22102025|0000000000000000000|MC|22102025|114016|1|0|0|0",
+        ))
+        .expect_write(&[ACK]);
+    let mut l = link(stream);
+    let res = l.request_list("0260|1|", "0261").await;
+    assert!(matches!(res, Err(Error::TooManyFrames { max: 10_000 })));
+    assert!(l.stream_mut().is_finished());
+}
+
+#[tokio::test(start_paused = true)]
+async fn list_10001_frames_ends_with_ack() {
+    let mut stream = AsyncScriptedStream::new()
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK]);
+    for n in 1..=10_001 {
+        let payload = format!(
+            "0261|00|597029414300|IT750050|{n:06}|{:06}|1000|9480|{n:06}|CR|22102025|0000000000000000000|MC|22102025|114016|1|0|0|0",
+            700_000 + n
+        );
+        stream = stream.then_reply(&frame(&payload)).expect_write(&[ACK]);
+    }
+    let mut l = link(stream);
+    let res = l.request_list("0260|1|", "0261").await;
+    assert!(matches!(res, Err(Error::TooManyFrames { max: 10_000 })));
+    assert!(l.stream_mut().is_finished());
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// Whatever the chunk size and the garbage before the ACK and between frames,
+    /// the exchange succeeds and the response is the same.
+    #[test]
+    fn any_chunking_and_garbage(
+        chunk in 1usize..32,
+        before_ack in prop::collection::vec(0x20u8..0x7F, 0..20),
+        between in prop::collection::vec(0x20u8..0x7F, 0..20),
+    ) {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .start_paused(true)
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let response = "0710|00|003|45000||";
+            let mut reply = before_ack.clone();
+            reply.push(ACK);
+            reply.extend(&between);
+            reply.extend(frame("0900|79"));
+            let mut stream = AsyncScriptedStream::new()
+                .expect_write(&frame("0700||"))
+                .then_reply(&reply)
+                .expect_write(&[ACK])
+                .then_reply(&between)
+                .then_reply(&frame(response))
+                .expect_write(&[ACK]);
+            stream.set_chunk_size(chunk);
+            let mut l = link(stream);
+            let mut statuses = 0;
+            let result = l.request("0700||", "0710", &mut |_| statuses += 1).await;
+            prop_assert_eq!(result.unwrap(), response);
+            prop_assert_eq!(statuses, 1);
+            prop_assert!(l.stream_mut().is_finished());
+            Ok(())
+        })?;
+    }
 }

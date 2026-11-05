@@ -246,7 +246,7 @@ impl<T: Transport, C: Clock> Link<T, C> {
             let Some(event) = self.next_event(deadline)? else {
                 return Ok(());
             };
-            match wait.on_event(event)? {
+            match wait.on_event(event) {
                 ListTailStep::SendNak => {
                     self.transport.write_all(&[NAK])?;
                 }
@@ -256,6 +256,10 @@ impl<T: Transport, C: Clock> Link<T, C> {
                 }
                 ListTailStep::AckTerminator => {
                     self.transport.write_all(&[ACK])?;
+                }
+                ListTailStep::AckError(err) => {
+                    self.transport.write_all(&[ACK])?;
+                    return Err(err);
                 }
                 ListTailStep::Ignore => {}
             }
