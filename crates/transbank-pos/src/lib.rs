@@ -17,6 +17,7 @@
 //! | [`Link`] | ACK/NAK, retransmission of unacknowledged frames, timeouts |
 //! | [`PosIntegrado`], [`PosAutoservicio`] | the clients: one method per operation |
 //! | [`transport`], `serial` | TCP, in-memory and (feature `serial`) serial port transports |
+//! | `tokio` (feature `tokio`) | asynchronous link and `AsyncPosIntegrado` client |
 //!
 //! **Terminals:** POS Integrado (Verifone VX520/VX520c, Ingenico Desk 3500, as cited
 //! by the official SDKs) and POS Autoservicio. The crate has **not yet been
@@ -117,6 +118,8 @@
 //! - `serde`: `Serialize` for responses and domain types, `Deserialize` for requests.
 //! - `tracing`: link events on the `transbank_pos::link` target; payloads only at
 //!   `trace` level, with account numbers and vouchers redacted.
+//! - `tokio`: asynchronous API under `tokio` module (`tokio::AsyncLink`, `tokio::AsyncPosIntegrado`).
+//! - `tokio-serial`: asynchronous serial stream for `tokio::AsyncPosIntegrado::open_serial`.
 //!
 //! The crate has no `unsafe` code, never panics on input from the POS, uses integer
 //! CLP amounts and spawns no threads.
@@ -132,11 +135,14 @@
 mod client;
 mod codes;
 mod error;
+pub(crate) mod exchange;
 mod link;
 pub mod message;
 pub mod protocol;
 #[cfg(feature = "serial")]
 pub mod serial;
+#[cfg(feature = "tokio")]
+pub mod tokio;
 pub mod transport;
 
 pub use client::{PosAutoservicio, PosIntegrado};

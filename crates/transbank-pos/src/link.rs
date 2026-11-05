@@ -10,20 +10,17 @@ use std::time::Duration;
 
 use crate::codes::IntermediateStatus;
 use crate::error::{Error, Result};
-use crate::message::parse_intermediate;
-use crate::protocol::{
-    ACK, FC_INTERMEDIATE, FrameDecoder, LinkEvent, NAK, decode_latin1, encode_frame,
+#[cfg(feature = "tracing")]
+use crate::exchange::function_code;
+use crate::exchange::{
+    AckStep, AckWait, ListTailStep, ListTailWait, ResponseStep, ResponseWait, count_frame,
+    is_list_terminator,
 };
+use crate::protocol::{ACK, FrameDecoder, LinkEvent, NAK, encode_frame};
 use crate::transport::{Clock, SystemClock, Transport};
-
-/// Maximum number of frames accepted in a multi-frame response (SAFE-02).
-const MAX_LIST_FRAMES: usize = 10_000;
 
 /// Size of the read buffer.
 const READ_CHUNK: usize = 512;
-
-/// Index of the authorization code in a detail entry (`0261`, `0291`).
-const DETAIL_AUTHORIZATION_FIELD: usize = 5;
 
 macro_rules! link_debug {
     ($($arg:tt)*) => {
@@ -241,29 +238,30 @@ impl<T: Transport, C: Clock> Link<T, C> {
         &mut self,
         expected: &'static str,
         entries: &mut Vec<String>,
-        mut frames: usize,
+        frames: usize,
     ) -> Result<()> {
+        let mut wait = ListTailWait::new(expected, frames);
         loop {
             let deadline = self.deadline(self.config.detail_tail);
             let Some(event) = self.next_event(deadline)? else {
                 return Ok(());
             };
-            let LinkEvent::Frame(payload) = event else {
-                // NAK on a bad LRC so the POS retransmits; anything else is ignored.
-                if matches!(event, LinkEvent::BadLrc { .. }) {
+            match wait.on_event(event) {
+                ListTailStep::SendNak => {
                     self.transport.write_all(&[NAK])?;
                 }
-                continue;
-            };
-            self.transport.write_all(&[ACK])?;
-            frames = count_frame(frames)?;
-            let text = decode_latin1(&payload);
-            let function_code = function_code(&text);
-            if function_code != expected {
-                return Err(unexpected(expected, &text));
-            }
-            if !is_list_terminator(&text) {
-                entries.push(text);
+                ListTailStep::AckEntry(text) => {
+                    self.transport.write_all(&[ACK])?;
+                    entries.push(text);
+                }
+                ListTailStep::AckTerminator => {
+                    self.transport.write_all(&[ACK])?;
+                }
+                ListTailStep::AckError(err) => {
+                    self.transport.write_all(&[ACK])?;
+                    return Err(err);
+                }
+                ListTailStep::Ignore => {}
             }
         }
     }
@@ -277,39 +275,40 @@ impl<T: Transport, C: Clock> Link<T, C> {
         self.transport.discard_input()?;
         self.decoder.reset();
         self.events.clear();
-        let attempts = self.config.max_attempts.max(1);
-        let mut naks = 0u8;
-        let mut attempt = 0u8;
-        while attempt < attempts {
-            attempt += 1;
+        let mut wait = AckWait::new(self.config.max_attempts);
+        while wait.next_attempt() {
+            let attempt = wait.attempt();
+            let _ = attempt;
             self.transport.write_all(frame)?;
             link_debug!(len = frame.len(), attempt, "frame sent");
             let deadline = self.deadline(self.config.ack_timeout);
             loop {
-                match self.next_event(deadline)? {
-                    Some(LinkEvent::Ack) => {
+                let step = if let Some(event) = self.next_event(deadline)? {
+                    wait.on_event(event)
+                } else {
+                    link_debug!("ACK timeout");
+                    AckStep::Timeout
+                };
+                match step {
+                    AckStep::Acked => {
                         link_debug!("ACK received");
                         return Ok(());
                     }
-                    Some(LinkEvent::Nak) => {
+                    AckStep::Nak => {
                         link_debug!("NAK received");
-                        naks = naks.saturating_add(1);
                         break;
                     }
-                    Some(event @ (LinkEvent::Frame(_) | LinkEvent::BadLrc { .. })) => {
+                    AckStep::ImplicitAck(event) => {
                         link_debug!("frame received before ACK: implicit ACK");
                         self.events.push_front(event);
                         return Ok(());
                     }
-                    Some(_) => {}
-                    None => {
-                        link_debug!("ACK timeout");
-                        break;
-                    }
+                    AckStep::Timeout => break,
+                    AckStep::Ignore => {}
                 }
             }
         }
-        Err(Error::NoAck { attempts, naks })
+        Err(wait.no_ack_error())
     }
 
     /// Waits for the next valid frame until `deadline`: acknowledges it, NAKs bad
@@ -320,35 +319,39 @@ impl<T: Transport, C: Clock> Link<T, C> {
         deadline: Duration,
         waited: Duration,
     ) -> Result<Received> {
-        let mut bad_lrc = 0u8;
+        let mut wait = ResponseWait::new(self.config.max_bad_lrc, expected);
         loop {
-            match self.next_event(deadline)? {
-                None => {
-                    link_debug!("response timeout");
-                    return Err(Error::ResponseTimeout { waited });
-                }
-                Some(LinkEvent::BadLrc { .. }) => {
-                    bad_lrc = bad_lrc.saturating_add(1);
-                    link_debug!(count = bad_lrc, "bad LRC");
-                    if bad_lrc > self.config.max_bad_lrc {
-                        return Err(Error::BadLrc { count: bad_lrc });
-                    }
+            let Some(event) = self.next_event(deadline)? else {
+                link_debug!("response timeout");
+                return Err(Error::ResponseTimeout { waited });
+            };
+            match wait.on_event(event)? {
+                ResponseStep::SendNak { count } => {
+                    let _ = count;
+                    link_debug!(count, "bad LRC");
                     self.transport.write_all(&[NAK])?;
                 }
-                Some(LinkEvent::Frame(payload)) => {
-                    self.transport.write_all(&[ACK])?;
-                    let text = decode_latin1(&payload);
-                    trace_payload(&text, self.trace_layout);
-                    let function_code = function_code(&text);
-                    if function_code == FC_INTERMEDIATE {
-                        return parse_intermediate(&text).map(Received::Status);
-                    }
-                    if function_code == expected {
-                        return Ok(Received::Response(text));
-                    }
-                    return Err(unexpected(expected, &text));
+                ResponseStep::BadLrcExhausted { count, error } => {
+                    let _ = count;
+                    link_debug!(count, "bad LRC");
+                    return Err(error);
                 }
-                Some(_) => {}
+                ResponseStep::AckStatus { text, status } => {
+                    self.transport.write_all(&[ACK])?;
+                    trace_payload(&text, self.trace_layout);
+                    return Ok(Received::Status(status));
+                }
+                ResponseStep::AckResponse { text } => {
+                    self.transport.write_all(&[ACK])?;
+                    trace_payload(&text, self.trace_layout);
+                    return Ok(Received::Response(text));
+                }
+                ResponseStep::AckUnexpected { text, error } => {
+                    self.transport.write_all(&[ACK])?;
+                    trace_payload(&text, self.trace_layout);
+                    return Err(error);
+                }
+                ResponseStep::Ignore => {}
             }
         }
     }
@@ -376,43 +379,13 @@ impl<T: Transport, C: Clock> Link<T, C> {
     }
 }
 
-fn count_frame(frames: usize) -> Result<usize> {
-    let frames = frames.saturating_add(1);
-    if frames > MAX_LIST_FRAMES {
-        return Err(Error::TooManyFrames {
-            max: MAX_LIST_FRAMES,
-        });
-    }
-    Ok(frames)
-}
-
-fn function_code(payload: &str) -> &str {
-    payload.split('|').next().unwrap_or_default().trim()
-}
-
-fn unexpected(expected: &'static str, payload: &str) -> Error {
-    Error::UnexpectedResponse {
-        expected,
-        received: function_code(payload).to_owned(),
-        payload: payload.to_owned(),
-    }
-}
-
-/// A detail entry without authorization code ends the list.
-fn is_list_terminator(payload: &str) -> bool {
-    payload
-        .split('|')
-        .nth(DETAIL_AUTHORIZATION_FIELD)
-        .is_none_or(|field| field.trim().is_empty())
-}
-
 #[cfg(feature = "tracing")]
-fn trace_payload(payload: &str, layout: TraceLayout) {
+pub(crate) fn trace_payload(payload: &str, layout: TraceLayout) {
     tracing::trace!(target: "transbank_pos::link", payload = %redact(payload, layout), "frame received");
 }
 
 #[cfg(not(feature = "tracing"))]
-fn trace_payload(_payload: &str, _layout: TraceLayout) {}
+pub(crate) fn trace_payload(_payload: &str, _layout: TraceLayout) {}
 
 /// Replaces the account number and voucher fields by `<redacted N>` according to the
 /// layout of the function code (`security-model.md` §3).

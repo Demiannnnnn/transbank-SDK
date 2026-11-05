@@ -19,6 +19,9 @@ mod simulator;
 mod tcp;
 mod transport;
 
+#[cfg(feature = "tokio")]
+mod async_stream;
+
 pub use request::{SaleArgs, SimRequest, parse_request};
 pub use scenario::Scenario;
 pub use simulator::{
@@ -26,3 +29,6 @@ pub use simulator::{
 };
 pub use tcp::TcpServer;
 pub use transport::SimTransport;
+
+#[cfg(feature = "tokio")]
+pub use async_stream::AsyncSimStream;
