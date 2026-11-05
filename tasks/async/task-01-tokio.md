@@ -41,7 +41,7 @@ Feature `tokio = ["dep:tokio"]` y `tokio-serial = ["tokio", "dep:tokio-serial", 
 
 ## Reporte
 - **Estado:** done
-- **Rama / commits:** `dev/async-01-tokio` · 0710306, 605e63f, 1e5cc44, a49276e
+- **Rama / commits:** `dev/async-01-tokio` · 0710306, 605e63f, 1e5cc44, a49276e, cf5d0a1
 - **Hecho:**
   - Extraído el núcleo sans-IO del intercambio en `crates/transbank-pos/src/exchange.rs` (`AckWait`, `ResponseWait`, `ListTailWait`, `count_frame`, `is_list_terminator`, `function_code`, `unexpected`), sin E/S ni reloj, reutilizado de forma idéntica por `Link` y `AsyncLink`.
   - Agregadas las dependencias opcionales `tokio` (con features exactas `rt, time, io-util, net, sync`) y `tokio-serial` en `transbank-pos`, `tokio` (solo `io-util`) en `transbank-pos-sim`, y `macros`, `test-util` exclusivamente en `[dev-dependencies]`.
