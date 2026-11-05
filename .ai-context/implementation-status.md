@@ -2,7 +2,7 @@
 
 Qué es real hoy versus planificado. **Lo mantiene el orquestador** a partir de los reportes de las tareas validadas. No asumas que algo funciona porque existe un archivo para ello.
 
-Última actualización: 2026-11-05 — AUTO-01 integrada sobre la 1.0.0 (aditiva, sin publicar ni tag). Falta HW-01 (dueño) y ASYNC-01.
+Última actualización: 2026-11-05 — AUTO-01 y ASYNC-01 integradas sobre la 1.0.0 (aditivas, sin publicar ni tag), 396 tests. Falta HW-01 (dueño).
 
 | Área | Estado | Tarea | Notas |
 |:--|:--|:--|:--|
@@ -19,13 +19,14 @@ Qué es real hoy versus planificado. **Lo mantiene el orquestador** a partir de 
 | Endurecimiento de tests | ✅ | TEST-01 | 271 tests (propiedades, `serde`, casos borde del enlace, modelo vs simulador, CLI). `cargo-mutants`: 654 mutantes, 0 escapes (561 detectados, 3 por timeout, 90 no compilan) |
 | Validación con POS real | ⬜ | HW-01 (dueño) | Preguntas OPEN-01…06 de `docs/protocol-spec.md` §10 |
 | POS Autoservicio | ✅ | AUTO-01 | Cliente, simulador y CLI; solo contra el simulador. 328 tests del workspace. Comandos solo los de `protocol-spec.md` §7; preguntas OPEN-07 y OPEN-08 |
-| API async (tokio) | ⬜ | ASYNC-01 | |
+| API async (tokio) | ✅ | ASYNC-01 | `AsyncLink`, `AsyncPosIntegrado`, `AsyncSimStream`; lógica de decisión compartida con `Link` en `exchange.rs`. 396 tests del workspace. `open_serial` solo compila y se prueba su error: sin puerto real. Sin cliente async de Autoservicio |
 | Publicación en crates.io | ⬜ | REL-01 (dueño) | Nombres libres al 2026-10-21 |
 
 ## Brechas conocidas
 
 - **`SaleResponse::is_approved()` de Integrado (1.0.0) acepta el código 90**, porque usa `ResponseCode::is_approved()`, aunque §9 limita el 90 a la inicialización. No se cambió: está fuera de AUTO-01 y decide el dueño. Los tipos Autoservicio ya son estrictos.
-- `cargo-mutants` no está instalado en este equipo y AGENTS.md §7 prohíbe `cargo install`: AUTO-01 tuvo mutaciones manuales en lo crítico (aprobación, redacción de trazas), no una pasada completa.
+- `cargo-mutants` no está instalado en este equipo y AGENTS.md §7 prohíbe `cargo install`: AUTO-01 y ASYNC-01 tuvieron mutaciones manuales en lo crítico (aprobación, redacción de trazas, drenado, EOF, ACK en la cola del detalle, plazos), no una pasada completa.
+- El MSRV 1.85 solo se comprobó en los `rust-version` declarados en `Cargo.lock` (ninguno supera 1.85): no se compiló con 1.85 porque este equipo tiene Rust 1.98.
 - Nada se probó con un POS real: el puerto serie solo se compiló; TCP y toda la lógica se probaron contra el simulador.
 - El CI de GitHub Actions no se ha ejecutado nunca (se dispara con push a `main`/`develop` o a mano): Linux/Windows sin verificar.
 - El protocolo no tiene documentación oficial pública en este repo: los bytes salen de los SDKs oficiales y hay 6 puntos sin confirmar (`docs/protocol-spec.md` §10) hasta HW-01.

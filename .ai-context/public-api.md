@@ -307,8 +307,13 @@ pub struct PosAutoservicio<T: Transport, C: Clock = SystemClock> { … }
 
 ## 9. Async (ASYNC-01, feature `tokio`)
 
-Módulo `transbank_pos::tokio` con `AsyncTransport`, `AsyncPosIntegrado` con los mismos métodos `async`, reutilizando `protocol` y `message`. Se especifica en su tarea.
+Módulo `transbank_pos::tokio`, reutilizando `protocol` y `message`:
+
+- `AsyncLink<S: AsyncRead + AsyncWrite + Unpin + Send>`: `new(stream, config)`, `send_command`, `request`, `request_list`, `config`, `stream_mut`, `into_inner`. No hay `AsyncTransport`.
+- `AsyncPosIntegrado<S>`: `new`, `with_config`, los métodos de `PosIntegrado` en `async`, `link_mut`, `into_inner`; `connect_tcp(addr)` (plazo interno de 5 s) y, con `tokio-serial`, `open_serial(path, baud)`.
+
+Soltar el futuro de una venta deja el resultado desconocido: se consulta `last_sale`. Requiere un runtime de Tokio con los drivers de tiempo y E/S.
 
 ## 10. Simulador — `transbank-pos-sim`
 
-Ver `docs/simulator-spec.md`. Superficie pública: `PosSimulator`, `TerminalKind`, `Scenario`, `SimulatedSale`, `SimTransport` (implementa `Transport`), `TcpServer`.
+Ver `docs/simulator-spec.md`. Superficie pública: `PosSimulator`, `TerminalKind`, `Scenario`, `SimulatedSale`, `SimTransport` (implementa `Transport`), `TcpServer`; con la feature `tokio`, `AsyncSimStream` (`AsyncRead + AsyncWrite` directo sobre `PosSimulator`, sin `spawn` ni `tokio::io::duplex`).

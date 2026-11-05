@@ -85,6 +85,7 @@ transbank-SDK/
 | `proptest` | 1 | dev-dependency | — | Propiedades del decodificador y del parseo |
 | `tokio` | 1 | **solo desde ASYNC-01**, optional | `rt`, `time`, `io-util`, `net`, `sync` | API async |
 | `tokio-serial` | 5 | **solo desde ASYNC-01**, optional | — | Puerto serie async |
+| `tokio` (dev) | 1 | dev-dependency de transbank-pos y transbank-pos-sim | además `macros`, `test-util` | `tokio::time::pause()` en tests (ASYNC-01) |
 
 Sin `anyhow`, sin `chrono`/`time` (fechas del POS con tipos propios), sin `log`, sin `bytes`, sin `once_cell`/`lazy_static`.
 

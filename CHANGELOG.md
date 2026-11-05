@@ -9,6 +9,8 @@ Additive changes, compatible with 1.0.0. Tested against the bundled simulator on
 ### Added
 
 - `transbank-pos`: `PosAutoservicio` client (`poll`, `load_keys`, `initialize`, `initialization_result`, `sale`, `sale_with_status`, `multicode_sale`, `last_sale(voucher)`, `refund_last`, `close(voucher)`, and `open` with feature `serial`, 19200 baud); `SelfServiceSaleResponse`, `SelfServiceMultiCodeSaleResponse`, `InitializationResponse`, their payload builders and parsers; `FC_INITIALIZE`, `FC_INITIALIZATION_RESULT`, `FC_INITIALIZATION_RESPONSE`.
+- `transbank-pos`: features `tokio` and `tokio-serial`, with the module `transbank_pos::tokio`: `AsyncLink` and `AsyncPosIntegrado` (every `PosIntegrado` operation, `connect_tcp` and, with `tokio-serial`, `open_serial`). Without these features nothing changes. There is no async POS Autoservicio client.
+- `transbank-pos-sim`: feature `tokio` with `AsyncSimStream`.
 - `transbank-pos-cli`: `--autoservicio` (19200 baud by default), `init`, `init-result`, `refund-last`, and `--voucher` on `last-sale` and `close` (Autoservicio only).
 
 ### Changed
