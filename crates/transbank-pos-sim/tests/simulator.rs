@@ -379,10 +379,10 @@ fn scenario_with_voucher() {
 }
 
 #[test]
-fn autoservicio_is_pending() {
+fn autoservicio_answers_poll_and_rejects_integrado_only_commands() {
     let mut sim = PosSimulator::new(TerminalKind::Autoservicio);
     assert_eq!(exchange(&mut sim, "0100"), (true, vec![]));
-    assert_eq!(exchange(&mut sim, "0200|000012000|1||0|0").1, ["0210|12"]);
+    assert_eq!(exchange(&mut sim, "0700||").1, ["0710|12"]);
 }
 
 #[test]

@@ -2,13 +2,13 @@
 
 > **Unofficial — not affiliated with, endorsed or supported by Transbank S.A.** "Transbank" is a trademark of its owner and is used only to describe compatibility.
 
-Simulator of a Transbank **POS Integrado** for testing applications built on [`transbank-pos`](https://crates.io/crates/transbank-pos) without hardware:
+Simulator of a Transbank **POS Integrado** and **POS Autoservicio** for testing applications built on [`transbank-pos`](https://crates.io/crates/transbank-pos) without hardware:
 
 - `PosSimulator`: sans-IO fake POS (ACK/NAK, retransmissions, sales, refunds, totals, detail, close) with injectable failures (`Scenario`: declined sale, intermediate messages, dropped ACKs, NAKs, no response, corrupted LRC, garbage, wrong function code, close required, voucher);
 - `SimTransport`: the simulator as a `transbank_pos::Transport` with simulated time — timeouts take no real time;
 - `TcpServer` and the `tbk-pos-sim` binary: the simulator over TCP (loopback only unless `--allow-remote`).
 
-Deterministic: fixed date/time, authorization codes derived from the operation number, no randomness. POS Autoservicio is not simulated yet.
+Deterministic: fixed date/time, authorization codes derived from the operation number, no randomness. Supports both POS Integrado and POS Autoservicio.
 
 ## Installation
 
