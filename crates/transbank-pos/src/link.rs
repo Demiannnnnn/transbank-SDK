@@ -10,12 +10,12 @@ use std::time::Duration;
 
 use crate::codes::IntermediateStatus;
 use crate::error::{Error, Result};
+#[cfg(feature = "tracing")]
+use crate::exchange::function_code;
 use crate::exchange::{
     AckStep, AckWait, ListTailStep, ListTailWait, ResponseStep, ResponseWait, count_frame,
     is_list_terminator,
 };
-#[cfg(feature = "tracing")]
-use crate::exchange::function_code;
 use crate::protocol::{ACK, FrameDecoder, LinkEvent, NAK, encode_frame};
 use crate::transport::{Clock, SystemClock, Transport};
 
