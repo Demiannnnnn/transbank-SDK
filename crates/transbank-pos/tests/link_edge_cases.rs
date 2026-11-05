@@ -380,7 +380,9 @@ fn tail_unexpected_function_is_acknowledged() {
     let mut link = Link::with_clock(transport, LinkConfig::default(), clock);
     let res = link.request_list("0260|1|", "0261");
     assert!(matches!(res, Err(Error::UnexpectedResponse { .. })));
-    assert_eq!(link.transport_mut().written().last().copied(), Some(ACK));
+    let mut expected = frame("0260|1|");
+    expected.resize(expected.len() + 2, ACK);
+    assert_eq!(link.transport_mut().written(), expected.as_slice());
 }
 
 #[test]
@@ -407,7 +409,9 @@ fn tail_10001st_frame_ends_with_ack() {
     let mut link = Link::with_clock(transport, LinkConfig::default(), clock);
     let res = link.request_list("0260|1|", "0261");
     assert!(matches!(res, Err(Error::TooManyFrames { max: 10_000 })));
-    assert_eq!(link.transport_mut().written().last().copied(), Some(ACK));
+    let mut expected = frame("0260|1|");
+    expected.resize(expected.len() + 10_001, ACK);
+    assert_eq!(link.transport_mut().written(), expected.as_slice());
 }
 
 #[test]
@@ -426,5 +430,7 @@ fn list_10001_frames_ends_with_ack() {
     let mut link = Link::with_clock(transport, LinkConfig::default(), clock);
     let res = link.request_list("0260|1|", "0261");
     assert!(matches!(res, Err(Error::TooManyFrames { max: 10_000 })));
-    assert_eq!(link.transport_mut().written().last().copied(), Some(ACK));
+    let mut expected = frame("0260|1|");
+    expected.resize(expected.len() + 10_001, ACK);
+    assert_eq!(link.transport_mut().written(), expected.as_slice());
 }
