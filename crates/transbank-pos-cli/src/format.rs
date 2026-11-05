@@ -4,8 +4,9 @@ use std::fmt::Write as _;
 
 use transbank_pos::serial::PortInfo;
 use transbank_pos::{
-    CardBrand, CardType, CloseResponse, DetailEntry, LoadKeysResponse, MultiCodeSaleResponse,
-    RefundResponse, ResponseCode, SaleResponse, TotalsResponse,
+    CardBrand, CardType, CloseResponse, DetailEntry, InitializationResponse, LoadKeysResponse,
+    MultiCodeSaleResponse, RefundResponse, ResponseCode, SaleResponse,
+    SelfServiceMultiCodeSaleResponse, SelfServiceSaleResponse, TotalsResponse,
 };
 
 /// Terminal ids of the simulator start with this prefix (security-model §4).
@@ -110,6 +111,76 @@ pub(crate) fn format_multicode_sale(title: &str, sale: &MultiCodeSaleResponse) -
         }
     }
     text
+}
+
+pub(crate) fn format_self_service_sale(title: &str, sale: &SelfServiceSaleResponse) -> String {
+    let tag = simulator_tag(sale.terminal_id.as_deref());
+    if !sale.is_approved() {
+        return format!("{tag}{}", rejected(title, sale.response_code));
+    }
+    let mut parts = vec![format!("{title} APROBADA")];
+    if let Some(code) = &sale.authorization_code {
+        parts.push(format!("autorización {code}"));
+    }
+    if let Some(amount) = sale.amount {
+        parts.push(clp(u64::from(amount)));
+    }
+    let card: Vec<&str> = [
+        sale.card_brand.as_ref().map(brand_name),
+        sale.card_type.as_ref().map(card_type_name),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let mut card = card.join(" ");
+    if let Some(last4) = &sale.last4_digits {
+        if !card.is_empty() {
+            card.push(' ');
+        }
+        card.push_str("···");
+        card.push_str(last4);
+    }
+    if !card.is_empty() {
+        parts.push(card);
+    }
+    if let (Some(count), Some(each)) = (sale.installments_number, sale.installments_amount) {
+        if count > 1 {
+            parts.push(format!("{count} cuotas de {}", clp(u64::from(each))));
+        }
+    }
+    if let Some(operation) = &sale.operation_number {
+        parts.push(format!("operación {operation}"));
+    }
+    format!("{tag}{}", parts.join(" — "))
+}
+
+pub(crate) fn format_self_service_multicode_sale(
+    title: &str,
+    sale: &SelfServiceMultiCodeSaleResponse,
+) -> String {
+    let mut text = format_self_service_sale(title, &sale.sale);
+    if sale.is_approved() {
+        if let Some(code) = &sale.commerce_provider_code {
+            let _ = write!(text, " — comercio {code}");
+        }
+    }
+    text
+}
+
+pub(crate) fn format_initialization(init: &InitializationResponse, is_sim: bool) -> String {
+    let tag = if is_sim { "[SIMULADOR] " } else { "" };
+    if !init.is_approved() {
+        return format!("{tag}Inicialización RECHAZADA — {}", init.response_code);
+    }
+    let mut parts = vec!["Inicialización APROBADA".to_owned()];
+    if let (Some(date), Some(time)) = (&init.date, &init.time) {
+        parts.push(format!("{date} {time}"));
+    } else if let Some(date) = &init.date {
+        parts.push(date.to_string());
+    } else if let Some(time) = &init.time {
+        parts.push(time.to_string());
+    }
+    format!("{tag}{}", parts.join(" — "))
 }
 
 pub(crate) fn format_refund(refund: &RefundResponse) -> String {

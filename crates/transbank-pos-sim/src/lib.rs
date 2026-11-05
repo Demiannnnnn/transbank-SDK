@@ -9,7 +9,7 @@
 //! - [`TcpServer`]: the simulator over TCP (also the `tbk-pos-sim` binary).
 //!
 //! The simulator is deterministic: fixed date and time, authorization codes derived
-//! from the operation number, no randomness. POS Autoservicio is pending (AUTO-01).
+//! from the operation number, no randomness. Supports POS Integrado and POS Autoservicio.
 
 #![forbid(unsafe_code)]
 

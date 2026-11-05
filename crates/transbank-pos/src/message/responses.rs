@@ -22,7 +22,7 @@ use crate::protocol::{
 const VOUCHER_LINE: usize = 40;
 
 /// Shows the length of a sensitive value, never its content (SEC-03).
-struct Redacted<'a>(&'a Option<String>);
+pub(super) struct Redacted<'a>(pub(super) &'a Option<String>);
 
 impl fmt::Debug for Redacted<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -33,7 +33,7 @@ impl fmt::Debug for Redacted<'_> {
     }
 }
 
-fn voucher_lines(voucher: Option<&String>) -> Option<Vec<&str>> {
+pub(super) fn voucher_lines(voucher: Option<&String>) -> Option<Vec<&str>> {
     let voucher = voucher?;
     let count = voucher.chars().count();
     if count == 0 || count % VOUCHER_LINE != 0 {

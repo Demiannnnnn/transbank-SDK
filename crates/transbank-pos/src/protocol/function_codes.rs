@@ -1,5 +1,5 @@
-//! Function codes (field 0) of the POS Integrado commands and responses
-//! (`docs/protocol-spec.md` §4–§6).
+//! Function codes (field 0) of the POS Integrado and POS Autoservicio commands and responses
+//! (`docs/protocol-spec.md` §4–§7).
 
 /// Poll (`0100`), answered only with ACK.
 pub const FC_POLL: &str = "0100";
@@ -47,3 +47,9 @@ pub const FC_CLOSE: &str = "0500";
 pub const FC_CLOSE_RESPONSE: &str = "0510";
 /// Intermediate status message.
 pub const FC_INTERMEDIATE: &str = "0900";
+/// Initialization request (Autoservicio, `0070`), answered only with ACK.
+pub const FC_INITIALIZE: &str = "0070";
+/// Initialization result request (Autoservicio, `0080`).
+pub const FC_INITIALIZATION_RESULT: &str = "0080";
+/// Initialization response (Autoservicio, `1080`).
+pub const FC_INITIALIZATION_RESPONSE: &str = "1080";

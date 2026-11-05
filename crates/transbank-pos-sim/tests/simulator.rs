@@ -379,10 +379,10 @@ fn scenario_with_voucher() {
 }
 
 #[test]
-fn autoservicio_is_pending() {
+fn autoservicio_answers_poll_and_rejects_integrado_only_commands() {
     let mut sim = PosSimulator::new(TerminalKind::Autoservicio);
     assert_eq!(exchange(&mut sim, "0100"), (true, vec![]));
-    assert_eq!(exchange(&mut sim, "0200|000012000|1||0|0").1, ["0210|12"]);
+    assert_eq!(exchange(&mut sim, "0700||").1, ["0710|12"]);
 }
 
 #[test]
@@ -555,4 +555,121 @@ fn tcp_observer_sees_input_and_output() {
     drop(stream);
     let seen = handle.join().unwrap().unwrap();
     assert_eq!(seen, [(frame("0100"), vec![ACK])]);
+}
+
+#[test]
+fn autoservicio_exact_approved_sales() {
+    let mut sim = PosSimulator::new(TerminalKind::Autoservicio);
+    let (acked, resp) = exchange(&mut sim, "0200|12000|ABC123|0|0");
+    assert!(acked);
+    assert_eq!(
+        resp,
+        [
+            "0210|00|597029414300|SIM00001|ABC123|112648|12000|0037|000001|CR|01012026|0000000000000000037|VI|01012026|120000||03|03|4000|CUOTAS SIN INTERES"
+        ]
+    );
+
+    let mut sim = PosSimulator::new(TerminalKind::Autoservicio);
+    let (acked, resp) = exchange(&mut sim, "0200|5000|T1|0|0");
+    assert!(acked);
+    assert_eq!(
+        resp,
+        [
+            "0210|00|597029414300|SIM00001|T1|112648|5000|0037|000001|CR|01012026|0000000000000000037|VI|01012026|120000|||||"
+        ]
+    );
+
+    let mut sim = PosSimulator::new(TerminalKind::Autoservicio);
+    let (acked, resp) = exchange(&mut sim, "0200|5000|T1|1|0");
+    assert!(acked);
+    let expected_voucher = "SIMULADOR 01 TICKET T1 $5000            SIMULADOR 02 TICKET T1 $5000            SIMULADOR 03 TICKET T1 $5000            ";
+    assert_eq!(
+        resp,
+        [format!(
+            "0210|00|597029414300|SIM00001|T1|112648|5000|0037|000001|CR|01012026|0000000000000000037|VI|01012026|120000|{expected_voucher}||||"
+        )]
+    );
+
+    let mut sim = PosSimulator::new(TerminalKind::Autoservicio);
+    let (acked, resp) = exchange(&mut sim, "0270|10000|T1|0|0|597012345678");
+    assert!(acked);
+    assert_eq!(
+        resp,
+        [
+            "0271|00|597029414300|SIM00001|T1|112648|10000|0037|000001|CR|01012026|0000000000000000037|VI|01012026|120000||03|03|3334|CUOTAS SIN INTERES|597012345678"
+        ]
+    );
+}
+
+#[test]
+fn autoservicio_sale_parser_strictness() {
+    let mut sim = PosSimulator::new(TerminalKind::Autoservicio);
+    let (acked, resp) = exchange(&mut sim, "0200|000012000|ABC123||0|0");
+    assert!(acked);
+    assert_eq!(resp, ["0210|61"]);
+    assert_eq!(sim.sales().len(), 0);
+
+    let (acked, resp) = exchange(&mut sim, "0200|12000|ABC123|0|0");
+    assert!(acked);
+    assert_eq!(field(&resp[0], 1), "00");
+    assert_eq!(sim.sales().len(), 1);
+
+    let (acked, resp) = exchange(&mut sim, "0200|1000|T1|2|0");
+    assert!(acked);
+    assert_eq!(resp, ["0210|61"]);
+}
+
+#[test]
+fn autoservicio_refund_last_sale_and_close_strictness() {
+    let mut sim = PosSimulator::new(TerminalKind::Autoservicio);
+    let _ = exchange(&mut sim, "0200|12000|ABC123|0|0");
+    assert_eq!(sim.sales().len(), 1);
+
+    let (acked, resp) = exchange(&mut sim, "1200|000142|");
+    assert!(acked);
+    assert_eq!(resp, ["1210|61"]);
+    assert!(!sim.sales()[0].refunded);
+
+    let (acked, resp) = exchange(&mut sim, "0250");
+    assert!(acked);
+    assert_eq!(resp, ["0260|61"]);
+
+    let (acked, resp) = exchange(&mut sim, "0500||");
+    assert!(acked);
+    assert_eq!(resp, ["0510|61"]);
+    assert_eq!(sim.sales().len(), 1);
+}
+
+#[test]
+fn autoservicio_init_and_unsupported_commands() {
+    let mut sim = PosSimulator::new(TerminalKind::Autoservicio);
+
+    let (acked, resp) = exchange(&mut sim, "0070");
+    assert!(acked);
+    assert!(resp.is_empty());
+
+    let (acked, resp) = exchange(&mut sim, "0080");
+    assert!(acked);
+    assert_eq!(resp, ["1080|90|01012026|120000"]);
+
+    for cmd in ["0300", "0280|1", "0290|1|", "0260|1|"] {
+        let (acked, resp) = exchange(&mut sim, cmd);
+        assert!(acked);
+        assert_eq!(field(&resp[0], 1), "12", "failed for {cmd}");
+    }
+}
+
+#[test]
+fn autoservicio_last_sale_after_multicode_has_no_field_20() {
+    let mut sim = PosSimulator::new(TerminalKind::Autoservicio);
+    let (acked, _) = exchange(&mut sim, "0270|10000|T1|0|0|597012345678");
+    assert!(acked);
+    let (acked, resp) = exchange(&mut sim, "0250|0");
+    assert!(acked);
+    assert_eq!(
+        resp,
+        [
+            "0260|00|597029414300|SIM00001|T1|112648|10000|0037|000001|CR|01012026|0000000000000000037|VI|01012026|120000||03|03|3334|CUOTAS SIN INTERES"
+        ]
+    );
 }
