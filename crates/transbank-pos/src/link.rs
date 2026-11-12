@@ -277,6 +277,11 @@ impl<T: Transport, C: Clock> Link<T, C> {
         self.events.clear();
         let mut wait = AckWait::new(self.config.max_attempts);
         while wait.next_attempt() {
+            if wait.attempt() > 1 {
+                // A partial frame left by the previous attempt (e.g. a stray STX)
+                // would swallow the ACK of this one (LINK-02, LINK-03).
+                self.decoder.reset();
+            }
             let attempt = wait.attempt();
             let _ = attempt;
             self.transport.write_all(frame)?;

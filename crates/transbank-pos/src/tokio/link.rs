@@ -230,6 +230,10 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
         self.discard_input().await;
         let mut wait = AckWait::new(self.config.max_attempts);
         while wait.next_attempt() {
+            if wait.attempt() > 1 {
+                // Same as `Link::send_frame`: drop a partial frame from the previous attempt.
+                self.decoder.reset();
+            }
             let attempt = wait.attempt();
             let _ = attempt;
             self.stream.write_all(frame).await?;

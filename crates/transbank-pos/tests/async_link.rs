@@ -1014,6 +1014,25 @@ async fn list_10001_frames_ends_with_ack() {
     assert!(l.stream_mut().is_finished());
 }
 
+#[tokio::test(start_paused = true)]
+async fn stray_stx_on_first_attempt_does_not_swallow_ack_on_retry() {
+    let sale = encode_frame("0200|000012000|ABC123||0|0").unwrap();
+    let resp = encode_frame("0210|00|597029414300|IT750050").unwrap();
+    let stream = AsyncScriptedStream::new()
+        .expect_write(&sale)
+        .then_reply(&[0x02])
+        .expect_write(&sale)
+        .then_reply(&[ACK])
+        .then_reply_after(Duration::from_secs(3), &resp)
+        .expect_write(&[ACK]);
+    let mut l = link(stream);
+    let got = l
+        .request("0200|000012000|ABC123||0|0", "0210", &mut |_| {})
+        .await
+        .unwrap();
+    assert_eq!(got, "0210|00|597029414300|IT750050");
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 
