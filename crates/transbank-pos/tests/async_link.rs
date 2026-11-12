@@ -1065,6 +1065,29 @@ async fn intermediate_messages_do_not_extend_the_list_deadline() {
     assert_eq!(start.elapsed().as_secs(), 150);
 }
 
+#[tokio::test(start_paused = true)]
+async fn detail_tail_fails_after_more_than_max_bad_lrc() {
+    let end = frame("0261|00|597029414300|IT750050||||||||||||||||");
+    let mut bad = end.clone();
+    if let Some(last) = bad.last_mut() {
+        *last ^= 0xFF;
+    }
+    let mut stream = AsyncScriptedStream::new()
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK])
+        .then_reply(&end)
+        .expect_write(&[ACK]);
+    for _ in 0..3 {
+        stream = stream.then_reply(&bad).expect_write(&[NAK]);
+    }
+    stream = stream.then_reply(&bad);
+    let mut l = link(stream);
+    assert!(matches!(
+        l.request_list("0260|1|", "0261").await,
+        Err(Error::BadLrc { count: 4 })
+    ));
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 

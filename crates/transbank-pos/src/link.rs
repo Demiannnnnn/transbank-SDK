@@ -243,22 +243,27 @@ impl<T: Transport, C: Clock> Link<T, C> {
         entries: &mut Vec<String>,
         frames: usize,
     ) -> Result<()> {
-        let mut wait = ListTailWait::new(expected, frames);
+        let mut wait = ListTailWait::new(expected, frames, self.config.max_bad_lrc);
+        // The tail ends after `detail_tail` without frames: ignored events do not renew it.
+        let mut deadline = self.deadline(self.config.detail_tail);
         loop {
-            let deadline = self.deadline(self.config.detail_tail);
             let Some(event) = self.next_event(deadline)? else {
                 return Ok(());
             };
             match wait.on_event(event) {
                 ListTailStep::SendNak => {
                     self.transport.write_all(&[NAK])?;
+                    deadline = self.deadline(self.config.detail_tail);
                 }
+                ListTailStep::BadLrcExhausted(err) => return Err(err),
                 ListTailStep::AckEntry(text) => {
                     self.transport.write_all(&[ACK])?;
                     entries.push(text);
+                    deadline = self.deadline(self.config.detail_tail);
                 }
                 ListTailStep::AckTerminator => {
                     self.transport.write_all(&[ACK])?;
+                    deadline = self.deadline(self.config.detail_tail);
                 }
                 ListTailStep::AckError(err) => {
                     self.transport.write_all(&[ACK])?;

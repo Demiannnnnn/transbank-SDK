@@ -401,6 +401,22 @@ fn intermediate_messages_do_not_extend_the_list_deadline() {
 }
 
 #[test]
+fn detail_tail_fails_after_more_than_max_bad_lrc() {
+    let clock = ManualClock::new();
+    let mut transport = list_script(&clock, &[END.to_owned()]);
+    for _ in 0..3 {
+        transport = transport.then_reply(&corrupted(END)).expect_write(&[NAK]);
+    }
+    transport = transport.then_reply(&corrupted(END));
+    let mut link = link(transport, &clock);
+    assert!(matches!(
+        link.request_list("0260|1|", "0261"),
+        Err(Error::BadLrc { count: 4 })
+    ));
+    assert!(link.transport_mut().is_finished());
+}
+
+#[test]
 fn link_is_send() {
     fn assert_send<T: Send>() {}
     assert_send::<Link<MemoryTransport, ManualClock>>();

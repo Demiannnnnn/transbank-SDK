@@ -335,9 +335,10 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
         entries: &mut Vec<String>,
         frames: usize,
     ) -> Result<()> {
-        let mut wait = ListTailWait::new(expected, frames);
+        let mut wait = ListTailWait::new(expected, frames, self.config.max_bad_lrc);
+        // The tail ends after `detail_tail` without frames: ignored events do not renew it.
+        let mut deadline = Self::deadline(self.config.detail_tail);
         loop {
-            let deadline = Self::deadline(self.config.detail_tail);
             let event = match ::tokio::time::timeout_at(deadline, self.next_event()).await {
                 Ok(Ok(event)) => event,
                 Ok(Err(err)) => return Err(err),
@@ -347,15 +348,19 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
                 ListTailStep::SendNak => {
                     self.stream.write_all(&[NAK]).await?;
                     self.stream.flush().await?;
+                    deadline = Self::deadline(self.config.detail_tail);
                 }
+                ListTailStep::BadLrcExhausted(err) => return Err(err),
                 ListTailStep::AckEntry(text) => {
                     self.stream.write_all(&[ACK]).await?;
                     self.stream.flush().await?;
                     entries.push(text);
+                    deadline = Self::deadline(self.config.detail_tail);
                 }
                 ListTailStep::AckTerminator => {
                     self.stream.write_all(&[ACK]).await?;
                     self.stream.flush().await?;
+                    deadline = Self::deadline(self.config.detail_tail);
                 }
                 ListTailStep::AckError(err) => {
                     self.stream.write_all(&[ACK]).await?;
