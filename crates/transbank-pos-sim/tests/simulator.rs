@@ -646,7 +646,7 @@ fn autoservicio_init_and_unsupported_commands() {
 
     let (acked, resp) = exchange(&mut sim, "0070");
     assert!(acked);
-    assert!(resp.is_empty());
+    assert_eq!(resp.len(), 0);
 
     let (acked, resp) = exchange(&mut sim, "0080");
     assert!(acked);
