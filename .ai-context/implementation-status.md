@@ -24,7 +24,7 @@ Qué es real hoy versus planificado. **Lo mantiene el orquestador** a partir de 
 
 ## Brechas conocidas
 
-- **`SaleResponse::is_approved()` de Integrado (1.0.0) acepta el código 90**, porque usa `ResponseCode::is_approved()`, aunque §9 limita el 90 a la inicialización. No se cambió: está fuera de AUTO-01 y decide el dueño. Los tipos Autoservicio ya son estrictos.
+- **`SaleResponse::is_approved()` de Integrado (1.0.0) aceptaba el código 90**, porque usaba `ResponseCode::is_approved()`, aunque §9 limita el 90 a la inicialización. Propuesta en `dev/fix-sale-approved-proposal`, pendiente del dueño. Los tipos Autoservicio ya son estrictos.
 - `cargo-mutants` no está instalado en este equipo y AGENTS.md §7 prohíbe `cargo install`: AUTO-01 y ASYNC-01 tuvieron mutaciones manuales en lo crítico (aprobación, redacción de trazas, drenado, EOF, ACK en la cola del detalle, plazos), no una pasada completa.
 - El MSRV 1.85 solo se comprobó en los `rust-version` declarados en `Cargo.lock` (ninguno supera 1.85): no se compiló con 1.85 porque este equipo tiene Rust 1.98.
 - Nada se probó con un POS real: el puerto serie solo se compiló; TCP y toda la lógica se probaron contra el simulador.

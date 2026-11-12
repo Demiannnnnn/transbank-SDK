@@ -18,6 +18,13 @@ Additive changes, compatible with 1.0.0. Tested against the bundled simulator on
 - `transbank-pos-sim`: `TerminalKind::Autoservicio` now simulates the terminal (`docs/protocol-spec.md` §7) instead of answering code 12 to everything but `0100`. Commands outside §7 still answer code 12.
 - `transbank-pos-cli`: `--baud` has no fixed default; it depends on the terminal (115200 is unchanged for POS Integrado).
 
+### Fixed
+
+- `transbank-pos`: POS Integrado response types (`SaleResponse`, `MultiCodeSaleResponse`, `DetailEntry`, `MultiCodeDetailEntry`, `LoadKeysResponse`, `CloseResponse`, `TotalsResponse`, `RefundResponse`) now strictly check `response_code == ResponseCode::Approved` in their `is_approved()` method instead of delegating to `ResponseCode::is_approved()`.
+  - **Compatibility note:** Observable behavioral change compared to 1.0.0: code 90 (`InitializationOk`) in POS Integrado responses is no longer treated as approved. Public API signatures remain unchanged.
+  - **Who is affected:** Only affects callers if a real POS Integrado terminal were to return code 90 on a transaction (never observed in practice; see OPEN questions in `docs/protocol-spec.md` §10).
+  - **Suggested version:** Patch version bump if published as an isolated fix; minor version bump if released together with the unreleased additions in `[Unreleased]`.
+
 ## [1.0.0] - 2026-10-22
 
 First release. Tested against the bundled simulator only: **never tested against a real Transbank terminal** (see the open questions in `docs/protocol-spec.md` §10).
