@@ -866,4 +866,102 @@ mod tests {
             parse_detail_entry("0261|00|1|T|1|2|3|4|5|CR|22102025|SECRETACCOUNT|MC").unwrap();
         assert!(!format!("{entry:?}").contains("SECRETACCOUNT"));
     }
+
+    #[test]
+    fn sale_response_code_90_is_not_approved() {
+        let payload_90 = SALE.replacen("|00|", "|90|", 1);
+        let sale_90 = parse_sale(&payload_90).unwrap();
+        assert!(!sale_90.is_approved());
+        assert_eq!(sale_90.response_code, ResponseCode::InitializationOk);
+
+        let sale_00 = parse_sale(SALE).unwrap();
+        assert!(sale_00.is_approved());
+        assert_eq!(sale_00.response_code, ResponseCode::Approved);
+    }
+
+    #[test]
+    fn multicode_sale_response_code_90_is_not_approved() {
+        let payload_base = format!(
+            "{}|0|1500|597012345678",
+            SALE.replacen("0210", "0271", 1).trim_end_matches('|')
+        );
+        let payload_90 = payload_base.replacen("|00|", "|90|", 1);
+        let sale_90 = parse_multicode_sale(&payload_90).unwrap();
+        assert!(!sale_90.is_approved());
+        assert_eq!(sale_90.sale.response_code, ResponseCode::InitializationOk);
+
+        let sale_00 = parse_multicode_sale(&payload_base).unwrap();
+        assert!(sale_00.is_approved());
+        assert_eq!(sale_00.sale.response_code, ResponseCode::Approved);
+    }
+
+    #[test]
+    fn detail_entry_code_90_is_not_approved() {
+        let payload_00 = "0261|00|597029414300|IT750050|abc123|757752|12000|9480|000135|CR|22102025|0000000000000000000|MC|22102025|114016|7|500|3334|03";
+        let payload_90 = "0261|90|597029414300|IT750050|abc123|757752|12000|9480|000135|CR|22102025|0000000000000000000|MC|22102025|114016|7|500|3334|03";
+        let entry_90 = parse_detail_entry(payload_90).unwrap();
+        assert!(!entry_90.is_approved());
+        assert_eq!(entry_90.response_code, ResponseCode::InitializationOk);
+
+        let entry_00 = parse_detail_entry(payload_00).unwrap();
+        assert!(entry_00.is_approved());
+        assert_eq!(entry_00.response_code, ResponseCode::Approved);
+    }
+
+    #[test]
+    fn multicode_detail_entry_code_90_is_not_approved() {
+        let payload_00 = "0291|00|597029414300|IT750050|abc123|757752|12000|03|3334|9480|000135|CR|22102025|0000000000000000000|MC|22102025|114016|7|500|0|597012345678";
+        let payload_90 = "0291|90|597029414300|IT750050|abc123|757752|12000|03|3334|9480|000135|CR|22102025|0000000000000000000|MC|22102025|114016|7|500|0|597012345678";
+        let entry_90 = parse_multicode_detail_entry(payload_90).unwrap();
+        assert!(!entry_90.is_approved());
+        assert_eq!(entry_90.sale.response_code, ResponseCode::InitializationOk);
+
+        let entry_00 = parse_multicode_detail_entry(payload_00).unwrap();
+        assert!(entry_00.is_approved());
+        assert_eq!(entry_00.sale.response_code, ResponseCode::Approved);
+    }
+
+    #[test]
+    fn load_keys_response_code_90_is_not_approved() {
+        let keys_90 = parse_load_keys("0810|90|597029414300|IT750050").unwrap();
+        assert!(!keys_90.is_approved());
+        assert_eq!(keys_90.response_code, ResponseCode::InitializationOk);
+
+        let keys_00 = parse_load_keys("0810|00|597029414300|IT750050").unwrap();
+        assert!(keys_00.is_approved());
+        assert_eq!(keys_00.response_code, ResponseCode::Approved);
+    }
+
+    #[test]
+    fn close_response_code_90_is_not_approved() {
+        let close_90 = parse_close("0510|90|597029414300|IT750050").unwrap();
+        assert!(!close_90.is_approved());
+        assert_eq!(close_90.response_code, ResponseCode::InitializationOk);
+
+        let close_00 = parse_close("0510|00|597029414300|IT750050").unwrap();
+        assert!(close_00.is_approved());
+        assert_eq!(close_00.response_code, ResponseCode::Approved);
+    }
+
+    #[test]
+    fn totals_response_code_90_is_not_approved() {
+        let totals_90 = parse_totals("0710|90|002|15000||").unwrap();
+        assert!(!totals_90.is_approved());
+        assert_eq!(totals_90.response_code, ResponseCode::InitializationOk);
+
+        let totals_00 = parse_totals("0710|00|002|15000||").unwrap();
+        assert!(totals_00.is_approved());
+        assert_eq!(totals_00.response_code, ResponseCode::Approved);
+    }
+
+    #[test]
+    fn refund_response_code_90_is_not_approved() {
+        let refund_90 = parse_refund("1210|90|597029414300|IT750050|162529|000142||").unwrap();
+        assert!(!refund_90.is_approved());
+        assert_eq!(refund_90.response_code, ResponseCode::InitializationOk);
+
+        let refund_00 = parse_refund("1210|00|597029414300|IT750050|162529|000142||").unwrap();
+        assert!(refund_00.is_approved());
+        assert_eq!(refund_00.response_code, ResponseCode::Approved);
+    }
 }
