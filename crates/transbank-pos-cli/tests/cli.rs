@@ -100,6 +100,13 @@ fn declined_sale_exits_one() {
 }
 
 #[test]
+fn sale_with_initialization_ok_code_is_not_approved() {
+    let output = run(&["--sim", "--scenario", "reject:90", "sale", "100", "T1"]).unwrap();
+    assert_code(&output, 1);
+    assert!(stdout(&output).contains("Venta RECHAZADA — 90 Inicialización OK"));
+}
+
+#[test]
 fn timeout_explains_unknown_result() {
     let output = run(&[
         "--sim",
