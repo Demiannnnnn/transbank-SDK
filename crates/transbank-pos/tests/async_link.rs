@@ -1033,6 +1033,23 @@ async fn stray_stx_on_first_attempt_does_not_swallow_ack_on_retry() {
     assert_eq!(got, "0210|00|597029414300|IT750050");
 }
 
+#[tokio::test(start_paused = true)]
+async fn command_without_response_ignores_frames_while_waiting_for_ack() {
+    let poll = frame("0100");
+    let mut bad = frame("0210|00");
+    if let Some(last) = bad.last_mut() {
+        *last ^= 0xFF;
+    }
+    let stream = AsyncScriptedStream::new()
+        .expect_write(&poll)
+        .then_reply(&bad)
+        .expect_write(&poll)
+        .then_reply(&[ACK]);
+    let mut l = link(stream);
+    l.send_command("0100").await.unwrap();
+    assert!(l.stream_mut().is_finished());
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 

@@ -70,15 +70,22 @@ pub(crate) struct AckWait {
     max_attempts: u8,
     attempt: u8,
     naks: u8,
+    implicit_ack: bool,
 }
 
 impl AckWait {
     /// Creates a new ACK waiter with a maximum number of transmission attempts.
-    pub(crate) fn new(max_attempts: u8) -> Self {
+    ///
+    /// `implicit_ack`: a frame (or a frame with a bad LRC) received before the ACK
+    /// counts as the ACK. Only for commands that expect a response; a command
+    /// without response (`0100`, `0300`, `0070`, `0260|0|`) ends only with an ACK
+    /// (`docs/protocol-spec.md` §3.3), so frames are discarded while waiting.
+    pub(crate) fn new(max_attempts: u8, implicit_ack: bool) -> Self {
         Self {
             max_attempts: max_attempts.max(1),
             attempt: 0,
             naks: 0,
+            implicit_ack,
         }
     }
 
@@ -104,7 +111,10 @@ impl AckWait {
                 self.naks = self.naks.saturating_add(1);
                 AckStep::Nak
             }
-            event @ (LinkEvent::Frame(_) | LinkEvent::BadLrc { .. }) => AckStep::ImplicitAck(event),
+            event @ (LinkEvent::Frame(_) | LinkEvent::BadLrc { .. }) if self.implicit_ack => {
+                AckStep::ImplicitAck(event)
+            }
+            LinkEvent::Frame(_) | LinkEvent::BadLrc { .. } => AckStep::Ignore,
             LinkEvent::Garbage(_) | LinkEvent::Overflow => AckStep::Ignore,
         }
     }
@@ -261,7 +271,7 @@ mod tests {
 
     #[test]
     fn ack_wait_transitions() {
-        let mut wait = AckWait::new(3);
+        let mut wait = AckWait::new(3, true);
         assert!(wait.next_attempt());
         assert_eq!(wait.attempt(), 1);
 
@@ -278,7 +288,7 @@ mod tests {
             AckStep::ImplicitAck(_)
         ));
 
-        let mut wait3 = AckWait::new(1);
+        let mut wait3 = AckWait::new(1, true);
         assert!(wait3.next_attempt());
         assert!(!wait3.next_attempt());
         assert!(matches!(

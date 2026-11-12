@@ -128,7 +128,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
     /// [`Error::NoAck`] after `max_attempts` transmissions, or an I/O error.
     pub async fn send_command(&mut self, payload: &str) -> Result<()> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame).await
+        self.send_frame(&frame, false).await
     }
 
     /// Sends a command, waits for its ACK and for the response `expected`
@@ -149,7 +149,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
         on_status: &mut (dyn FnMut(IntermediateStatus) + Send),
     ) -> Result<String> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame).await?;
+        self.send_frame(&frame, true).await?;
         let waited = self.config.response_timeout;
         let deadline = Self::deadline(waited);
         loop {
@@ -177,7 +177,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
         expected: &'static str,
     ) -> Result<Vec<String>> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame).await?;
+        self.send_frame(&frame, true).await?;
         let mut entries = Vec::new();
         let mut frames = 0usize;
         loop {
@@ -226,9 +226,9 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
     /// A valid frame received while waiting for the ACK means the POS accepted the
     /// command and the ACK was lost: it is kept for the response and treated as an
     /// implicit ACK, so the command is never written again (LINK-03).
-    async fn send_frame(&mut self, frame: &[u8]) -> Result<()> {
+    async fn send_frame(&mut self, frame: &[u8], implicit_ack: bool) -> Result<()> {
         self.discard_input().await;
-        let mut wait = AckWait::new(self.config.max_attempts);
+        let mut wait = AckWait::new(self.config.max_attempts, implicit_ack);
         while wait.next_attempt() {
             if wait.attempt() > 1 {
                 // Same as `Link::send_frame`: drop a partial frame from the previous attempt.

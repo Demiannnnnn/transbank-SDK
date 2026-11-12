@@ -351,6 +351,40 @@ fn stray_stx_on_first_attempt_does_not_swallow_ack_on_retry() {
     assert_eq!(got, "0210|00|597029414300|IT750050");
 }
 
+/// A command without response ends only with an ACK: a frame (here with a bad
+/// LRC) arriving instead is discarded and the command is retried.
+#[test]
+fn command_without_response_ignores_frames_while_waiting_for_ack() {
+    let clock = ManualClock::new();
+    let poll = frame("0100");
+    let transport = MemoryTransport::new(clock.clone())
+        .expect_write(&poll)
+        .then_reply(&corrupted("0210|00"))
+        .expect_write(&poll)
+        .then_reply(&[ACK]);
+    let mut link = link(transport, &clock);
+    link.send_command("0100").unwrap();
+    assert!(link.transport_mut().is_finished());
+    assert_eq!(count_occurrences(link.transport_mut().written(), &poll), 2);
+}
+
+#[test]
+fn command_without_response_fails_when_only_frames_arrive() {
+    let clock = ManualClock::new();
+    let poll = frame("0100");
+    let transport = MemoryTransport::new(clock.clone())
+        .expect_write(&poll)
+        .then_reply(&frame("0210|00"))
+        .expect_write(&poll)
+        .then_reply(&frame("0210|00"))
+        .expect_write(&poll);
+    let mut link = link(transport, &clock);
+    assert!(matches!(
+        link.send_command("0100"),
+        Err(Error::NoAck { attempts: 3, .. })
+    ));
+}
+
 #[test]
 fn link_is_send() {
     fn assert_send<T: Send>() {}

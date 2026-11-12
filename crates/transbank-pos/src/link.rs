@@ -152,7 +152,7 @@ impl<T: Transport, C: Clock> Link<T, C> {
     /// [`Error::NoAck`] after `max_attempts` transmissions, or a transport error.
     pub fn send_command(&mut self, payload: &str) -> Result<()> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame)
+        self.send_frame(&frame, false)
     }
 
     /// Sends a command, waits for its ACK and for the response `expected`
@@ -173,7 +173,7 @@ impl<T: Transport, C: Clock> Link<T, C> {
         on_status: &mut dyn FnMut(IntermediateStatus),
     ) -> Result<String> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame)?;
+        self.send_frame(&frame, true)?;
         let deadline = self.deadline(self.config.response_timeout);
         loop {
             match self.receive(expected, deadline, self.config.response_timeout)? {
@@ -196,7 +196,7 @@ impl<T: Transport, C: Clock> Link<T, C> {
     /// 10 000 frames.
     pub fn request_list(&mut self, payload: &str, expected: &'static str) -> Result<Vec<String>> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame)?;
+        self.send_frame(&frame, true)?;
         let mut entries = Vec::new();
         let mut frames = 0usize;
         loop {
@@ -271,11 +271,11 @@ impl<T: Transport, C: Clock> Link<T, C> {
     /// A valid frame received while waiting for the ACK means the POS accepted the
     /// command and the ACK was lost: it is kept for the response and treated as an
     /// implicit ACK, so the command is never written again (LINK-03).
-    fn send_frame(&mut self, frame: &[u8]) -> Result<()> {
+    fn send_frame(&mut self, frame: &[u8], implicit_ack: bool) -> Result<()> {
         self.transport.discard_input()?;
         self.decoder.reset();
         self.events.clear();
-        let mut wait = AckWait::new(self.config.max_attempts);
+        let mut wait = AckWait::new(self.config.max_attempts, implicit_ack);
         while wait.next_attempt() {
             if wait.attempt() > 1 {
                 // A partial frame left by the previous attempt (e.g. a stray STX)
