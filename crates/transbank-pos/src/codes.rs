@@ -131,6 +131,13 @@ response_codes! {
 impl ResponseCode {
     /// `true` only for [`Approved`](Self::Approved) and, in the self-service
     /// initialization, [`InitializationOk`](Self::InitializationOk).
+    ///
+    /// # Warning
+    ///
+    /// This method includes code 90 ([`InitializationOk`](Self::InitializationOk)),
+    /// which is only meaningful for POS Autoservicio initialization (`1080`). To decide
+    /// whether a POS Integrado operation was approved, use the `is_approved()` method of
+    /// the specific response type (e.g. [`SaleResponse::is_approved`](crate::SaleResponse::is_approved)).
     #[must_use]
     pub fn is_approved(self) -> bool {
         matches!(self, Self::Approved | Self::InitializationOk)

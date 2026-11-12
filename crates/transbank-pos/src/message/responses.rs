@@ -106,10 +106,11 @@ pub struct SaleResponse {
 }
 
 impl SaleResponse {
-    /// `true` only if the POS approved the sale.
+    /// `true` only if `response_code == ResponseCode::Approved`; code 90 (`InitializationOk`)
+    /// is only meaningful for the self-service initialization, see `docs/protocol-spec.md` §9.
     #[must_use]
     pub fn is_approved(&self) -> bool {
-        self.response_code.is_approved()
+        self.response_code == ResponseCode::Approved
     }
 
     /// Voucher split in lines of 40 characters, if its length is a multiple of 40.
@@ -191,7 +192,8 @@ pub struct MultiCodeSaleResponse {
 }
 
 impl MultiCodeSaleResponse {
-    /// `true` only if the POS approved the sale.
+    /// `true` only if `response_code == ResponseCode::Approved`; code 90 (`InitializationOk`)
+    /// is only meaningful for the self-service initialization, see `docs/protocol-spec.md` §9.
     #[must_use]
     pub fn is_approved(&self) -> bool {
         self.sale.is_approved()
@@ -246,10 +248,11 @@ pub struct DetailEntry {
 }
 
 impl DetailEntry {
-    /// `true` only if the entry is an approved sale.
+    /// `true` only if `response_code == ResponseCode::Approved`; code 90 (`InitializationOk`)
+    /// is only meaningful for the self-service initialization, see `docs/protocol-spec.md` §9.
     #[must_use]
     pub fn is_approved(&self) -> bool {
-        self.response_code.is_approved()
+        self.response_code == ResponseCode::Approved
     }
 }
 
@@ -297,7 +300,8 @@ pub struct MultiCodeDetailEntry {
 }
 
 impl MultiCodeDetailEntry {
-    /// `true` only if the entry is an approved sale.
+    /// `true` only if `response_code == ResponseCode::Approved`; code 90 (`InitializationOk`)
+    /// is only meaningful for the self-service initialization, see `docs/protocol-spec.md` §9.
     #[must_use]
     pub fn is_approved(&self) -> bool {
         self.sale.is_approved()
@@ -320,10 +324,11 @@ pub struct LoadKeysResponse {
 }
 
 impl LoadKeysResponse {
-    /// `true` if the keys were loaded.
+    /// `true` only if `response_code == ResponseCode::Approved`; code 90 (`InitializationOk`)
+    /// is only meaningful for the self-service initialization, see `docs/protocol-spec.md` §9.
     #[must_use]
     pub fn is_approved(&self) -> bool {
-        self.response_code.is_approved()
+        self.response_code == ResponseCode::Approved
     }
 }
 
@@ -345,10 +350,11 @@ pub struct CloseResponse {
 }
 
 impl CloseResponse {
-    /// `true` if the close succeeded.
+    /// `true` only if `response_code == ResponseCode::Approved`; code 90 (`InitializationOk`)
+    /// is only meaningful for the self-service initialization, see `docs/protocol-spec.md` §9.
     #[must_use]
     pub fn is_approved(&self) -> bool {
-        self.response_code.is_approved()
+        self.response_code == ResponseCode::Approved
     }
 
     /// Voucher split in lines of 40 characters, if its length is a multiple of 40.
@@ -389,10 +395,11 @@ pub struct TotalsResponse {
 }
 
 impl TotalsResponse {
-    /// `true` if the POS answered successfully.
+    /// `true` only if `response_code == ResponseCode::Approved`; code 90 (`InitializationOk`)
+    /// is only meaningful for the self-service initialization, see `docs/protocol-spec.md` §9.
     #[must_use]
     pub fn is_approved(&self) -> bool {
-        self.response_code.is_approved()
+        self.response_code == ResponseCode::Approved
     }
 }
 
@@ -416,10 +423,11 @@ pub struct RefundResponse {
 }
 
 impl RefundResponse {
-    /// `true` if the refund was approved.
+    /// `true` only if `response_code == ResponseCode::Approved`; code 90 (`InitializationOk`)
+    /// is only meaningful for the self-service initialization, see `docs/protocol-spec.md` §9.
     #[must_use]
     pub fn is_approved(&self) -> bool {
-        self.response_code.is_approved()
+        self.response_code == ResponseCode::Approved
     }
 }
 
