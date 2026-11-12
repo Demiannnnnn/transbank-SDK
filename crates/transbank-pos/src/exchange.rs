@@ -114,8 +114,10 @@ impl AckWait {
             event @ (LinkEvent::Frame(_) | LinkEvent::BadLrc { .. }) if self.implicit_ack => {
                 AckStep::ImplicitAck(event)
             }
-            LinkEvent::Frame(_) | LinkEvent::BadLrc { .. } => AckStep::Ignore,
-            LinkEvent::Garbage(_) | LinkEvent::Overflow => AckStep::Ignore,
+            LinkEvent::Frame(_)
+            | LinkEvent::BadLrc { .. }
+            | LinkEvent::Garbage(_)
+            | LinkEvent::Overflow => AckStep::Ignore,
         }
     }
 
