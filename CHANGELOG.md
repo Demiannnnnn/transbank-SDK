@@ -18,6 +18,13 @@ Additive changes, compatible with 1.0.0. Tested against the bundled simulator on
 - `transbank-pos-sim`: `TerminalKind::Autoservicio` now simulates the terminal (`docs/protocol-spec.md` §7) instead of answering code 12 to everything but `0100`. Commands outside §7 still answer code 12.
 - `transbank-pos-cli`: `--baud` has no fixed default; it depends on the terminal (115200 is unchanged for POS Integrado).
 
+### Fixed
+
+- `transbank-pos`: `Link`/`AsyncLink` reset the frame decoder before each retransmission, so a stray `STX` on a failed attempt no longer swallows the ACK of the next one (which caused the frame to be written again after it was acknowledged and a false `NoAck`).
+- `transbank-pos`: commands without a response (`poll`, normal mode, initialization, print detail on the POS) now end only with an ACK; a frame or a bad-LRC frame received instead is discarded, so line noise or another serial device can no longer make `poll()`/`autoconnect` succeed.
+- `transbank-pos`: the sales detail tail fails with `Error::BadLrc` after more than `max_bad_lrc` consecutive bad LRCs instead of answering `NAK` forever.
+- `transbank-pos`: intermediate `0900` messages no longer extend `response_timeout` while reading the sales detail.
+
 ## [1.0.0] - 2026-10-22
 
 First release. Tested against the bundled simulator only: **never tested against a real Transbank terminal** (see the open questions in `docs/protocol-spec.md` §10).

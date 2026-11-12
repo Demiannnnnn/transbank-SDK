@@ -152,7 +152,7 @@ impl<T: Transport, C: Clock> Link<T, C> {
     /// [`Error::NoAck`] after `max_attempts` transmissions, or a transport error.
     pub fn send_command(&mut self, payload: &str) -> Result<()> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame)
+        self.send_frame(&frame, false)
     }
 
     /// Sends a command, waits for its ACK and for the response `expected`
@@ -173,7 +173,7 @@ impl<T: Transport, C: Clock> Link<T, C> {
         on_status: &mut dyn FnMut(IntermediateStatus),
     ) -> Result<String> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame)?;
+        self.send_frame(&frame, true)?;
         let deadline = self.deadline(self.config.response_timeout);
         loop {
             match self.receive(expected, deadline, self.config.response_timeout)? {
@@ -196,15 +196,18 @@ impl<T: Transport, C: Clock> Link<T, C> {
     /// 10 000 frames.
     pub fn request_list(&mut self, payload: &str, expected: &'static str) -> Result<Vec<String>> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame)?;
+        self.send_frame(&frame, true)?;
         let mut entries = Vec::new();
         let mut frames = 0usize;
+        // Each list frame gets a fresh `response_timeout`; a `0900` does not extend it
+        // (docs/protocol-spec.md §3.2 step 4).
+        let mut deadline = self.deadline(self.config.response_timeout);
         loop {
-            let deadline = self.deadline(self.config.response_timeout);
             let response = match self.receive(expected, deadline, self.config.response_timeout)? {
                 Received::Status(_) => continue,
                 Received::Response(response) => response,
             };
+            deadline = self.deadline(self.config.response_timeout);
             frames = count_frame(frames)?;
             if is_list_terminator(&response) {
                 break;
@@ -240,22 +243,27 @@ impl<T: Transport, C: Clock> Link<T, C> {
         entries: &mut Vec<String>,
         frames: usize,
     ) -> Result<()> {
-        let mut wait = ListTailWait::new(expected, frames);
+        let mut wait = ListTailWait::new(expected, frames, self.config.max_bad_lrc);
+        // The tail ends after `detail_tail` without frames: ignored events do not renew it.
+        let mut deadline = self.deadline(self.config.detail_tail);
         loop {
-            let deadline = self.deadline(self.config.detail_tail);
             let Some(event) = self.next_event(deadline)? else {
                 return Ok(());
             };
             match wait.on_event(event) {
                 ListTailStep::SendNak => {
                     self.transport.write_all(&[NAK])?;
+                    deadline = self.deadline(self.config.detail_tail);
                 }
+                ListTailStep::BadLrcExhausted(err) => return Err(err),
                 ListTailStep::AckEntry(text) => {
                     self.transport.write_all(&[ACK])?;
                     entries.push(text);
+                    deadline = self.deadline(self.config.detail_tail);
                 }
                 ListTailStep::AckTerminator => {
                     self.transport.write_all(&[ACK])?;
+                    deadline = self.deadline(self.config.detail_tail);
                 }
                 ListTailStep::AckError(err) => {
                     self.transport.write_all(&[ACK])?;
@@ -271,12 +279,17 @@ impl<T: Transport, C: Clock> Link<T, C> {
     /// A valid frame received while waiting for the ACK means the POS accepted the
     /// command and the ACK was lost: it is kept for the response and treated as an
     /// implicit ACK, so the command is never written again (LINK-03).
-    fn send_frame(&mut self, frame: &[u8]) -> Result<()> {
+    fn send_frame(&mut self, frame: &[u8], implicit_ack: bool) -> Result<()> {
         self.transport.discard_input()?;
         self.decoder.reset();
         self.events.clear();
-        let mut wait = AckWait::new(self.config.max_attempts);
+        let mut wait = AckWait::new(self.config.max_attempts, implicit_ack);
         while wait.next_attempt() {
+            if wait.attempt() > 1 {
+                // A partial frame left by the previous attempt (e.g. a stray STX)
+                // would swallow the ACK of this one (LINK-02, LINK-03).
+                self.decoder.reset();
+            }
             let attempt = wait.attempt();
             let _ = attempt;
             self.transport.write_all(frame)?;

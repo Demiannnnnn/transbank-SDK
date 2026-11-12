@@ -1014,6 +1014,80 @@ async fn list_10001_frames_ends_with_ack() {
     assert!(l.stream_mut().is_finished());
 }
 
+#[tokio::test(start_paused = true)]
+async fn stray_stx_on_first_attempt_does_not_swallow_ack_on_retry() {
+    let sale = encode_frame("0200|000012000|ABC123||0|0").unwrap();
+    let resp = encode_frame("0210|00|597029414300|IT750050").unwrap();
+    let stream = AsyncScriptedStream::new()
+        .expect_write(&sale)
+        .then_reply(&[0x02])
+        .expect_write(&sale)
+        .then_reply(&[ACK])
+        .then_reply_after(Duration::from_secs(3), &resp)
+        .expect_write(&[ACK]);
+    let mut l = link(stream);
+    let got = l
+        .request("0200|000012000|ABC123||0|0", "0210", &mut |_| {})
+        .await
+        .unwrap();
+    assert_eq!(got, "0210|00|597029414300|IT750050");
+}
+
+#[tokio::test(start_paused = true)]
+async fn command_without_response_ignores_frames_while_waiting_for_ack() {
+    let poll = frame("0100");
+    let mut bad = frame("0210|00");
+    if let Some(last) = bad.last_mut() {
+        *last ^= 0xFF;
+    }
+    let stream = AsyncScriptedStream::new()
+        .expect_write(&poll)
+        .then_reply(&bad)
+        .expect_write(&poll)
+        .then_reply(&[ACK]);
+    let mut l = link(stream);
+    l.send_command("0100").await.unwrap();
+    assert!(l.stream_mut().is_finished());
+}
+
+#[tokio::test(start_paused = true)]
+async fn intermediate_messages_do_not_extend_the_list_deadline() {
+    let stream = AsyncScriptedStream::new()
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK])
+        .then_reply_after(Duration::from_secs(100), &frame("0900|78"))
+        .expect_write(&[ACK])
+        .then_reply_after(Duration::from_secs(100), &frame("0900|81"));
+    let mut l = link(stream);
+    let start = tokio::time::Instant::now();
+    let result = l.request_list("0260|1|", "0261").await;
+    assert!(matches!(result, Err(Error::ResponseTimeout { .. })));
+    assert_eq!(start.elapsed().as_secs(), 150);
+}
+
+#[tokio::test(start_paused = true)]
+async fn detail_tail_fails_after_more_than_max_bad_lrc() {
+    let end = frame("0261|00|597029414300|IT750050||||||||||||||||");
+    let mut bad = end.clone();
+    if let Some(last) = bad.last_mut() {
+        *last ^= 0xFF;
+    }
+    let mut stream = AsyncScriptedStream::new()
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK])
+        .then_reply(&end)
+        .expect_write(&[ACK]);
+    for _ in 0..3 {
+        stream = stream.then_reply(&bad).expect_write(&[NAK]);
+    }
+    stream = stream.then_reply(&bad);
+    let mut l = link(stream);
+    assert!(matches!(
+        l.request_list("0260|1|", "0261").await,
+        Err(Error::BadLrc { count: 4 })
+    ));
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 

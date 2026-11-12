@@ -128,7 +128,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
     /// [`Error::NoAck`] after `max_attempts` transmissions, or an I/O error.
     pub async fn send_command(&mut self, payload: &str) -> Result<()> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame).await
+        self.send_frame(&frame, false).await
     }
 
     /// Sends a command, waits for its ACK and for the response `expected`
@@ -149,7 +149,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
         on_status: &mut (dyn FnMut(IntermediateStatus) + Send),
     ) -> Result<String> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame).await?;
+        self.send_frame(&frame, true).await?;
         let waited = self.config.response_timeout;
         let deadline = Self::deadline(waited);
         loop {
@@ -177,16 +177,19 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
         expected: &'static str,
     ) -> Result<Vec<String>> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame).await?;
+        self.send_frame(&frame, true).await?;
         let mut entries = Vec::new();
         let mut frames = 0usize;
+        let waited = self.config.response_timeout;
+        // Each list frame gets a fresh `response_timeout`; a `0900` does not extend it
+        // (docs/protocol-spec.md §3.2 step 4).
+        let mut deadline = Self::deadline(waited);
         loop {
-            let waited = self.config.response_timeout;
-            let deadline = Self::deadline(waited);
             let response = match self.receive(expected, deadline, waited).await? {
                 Received::Status(_) => continue,
                 Received::Response(response) => response,
             };
+            deadline = Self::deadline(waited);
             frames = count_frame(frames)?;
             if is_list_terminator(&response) {
                 break;
@@ -226,10 +229,14 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
     /// A valid frame received while waiting for the ACK means the POS accepted the
     /// command and the ACK was lost: it is kept for the response and treated as an
     /// implicit ACK, so the command is never written again (LINK-03).
-    async fn send_frame(&mut self, frame: &[u8]) -> Result<()> {
+    async fn send_frame(&mut self, frame: &[u8], implicit_ack: bool) -> Result<()> {
         self.discard_input().await;
-        let mut wait = AckWait::new(self.config.max_attempts);
+        let mut wait = AckWait::new(self.config.max_attempts, implicit_ack);
         while wait.next_attempt() {
+            if wait.attempt() > 1 {
+                // Same as `Link::send_frame`: drop a partial frame from the previous attempt.
+                self.decoder.reset();
+            }
             let attempt = wait.attempt();
             let _ = attempt;
             self.stream.write_all(frame).await?;
@@ -328,9 +335,10 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
         entries: &mut Vec<String>,
         frames: usize,
     ) -> Result<()> {
-        let mut wait = ListTailWait::new(expected, frames);
+        let mut wait = ListTailWait::new(expected, frames, self.config.max_bad_lrc);
+        // The tail ends after `detail_tail` without frames: ignored events do not renew it.
+        let mut deadline = Self::deadline(self.config.detail_tail);
         loop {
-            let deadline = Self::deadline(self.config.detail_tail);
             let event = match ::tokio::time::timeout_at(deadline, self.next_event()).await {
                 Ok(Ok(event)) => event,
                 Ok(Err(err)) => return Err(err),
@@ -340,15 +348,19 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
                 ListTailStep::SendNak => {
                     self.stream.write_all(&[NAK]).await?;
                     self.stream.flush().await?;
+                    deadline = Self::deadline(self.config.detail_tail);
                 }
+                ListTailStep::BadLrcExhausted(err) => return Err(err),
                 ListTailStep::AckEntry(text) => {
                     self.stream.write_all(&[ACK]).await?;
                     self.stream.flush().await?;
                     entries.push(text);
+                    deadline = Self::deadline(self.config.detail_tail);
                 }
                 ListTailStep::AckTerminator => {
                     self.stream.write_all(&[ACK]).await?;
                     self.stream.flush().await?;
+                    deadline = Self::deadline(self.config.detail_tail);
                 }
                 ListTailStep::AckError(err) => {
                     self.stream.write_all(&[ACK]).await?;

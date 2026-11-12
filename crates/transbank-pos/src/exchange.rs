@@ -70,15 +70,22 @@ pub(crate) struct AckWait {
     max_attempts: u8,
     attempt: u8,
     naks: u8,
+    implicit_ack: bool,
 }
 
 impl AckWait {
     /// Creates a new ACK waiter with a maximum number of transmission attempts.
-    pub(crate) fn new(max_attempts: u8) -> Self {
+    ///
+    /// `implicit_ack`: a frame (or a frame with a bad LRC) received before the ACK
+    /// counts as the ACK. Only for commands that expect a response; a command
+    /// without response (`0100`, `0300`, `0070`, `0260|0|`) ends only with an ACK
+    /// (`docs/protocol-spec.md` §3.3), so frames are discarded while waiting.
+    pub(crate) fn new(max_attempts: u8, implicit_ack: bool) -> Self {
         Self {
             max_attempts: max_attempts.max(1),
             attempt: 0,
             naks: 0,
+            implicit_ack,
         }
     }
 
@@ -104,8 +111,13 @@ impl AckWait {
                 self.naks = self.naks.saturating_add(1);
                 AckStep::Nak
             }
-            event @ (LinkEvent::Frame(_) | LinkEvent::BadLrc { .. }) => AckStep::ImplicitAck(event),
-            LinkEvent::Garbage(_) | LinkEvent::Overflow => AckStep::Ignore,
+            event @ (LinkEvent::Frame(_) | LinkEvent::BadLrc { .. }) if self.implicit_ack => {
+                AckStep::ImplicitAck(event)
+            }
+            LinkEvent::Frame(_)
+            | LinkEvent::BadLrc { .. }
+            | LinkEvent::Garbage(_)
+            | LinkEvent::Overflow => AckStep::Ignore,
         }
     }
 
@@ -207,6 +219,8 @@ pub(crate) enum ListTailStep {
     /// Valid frame received in tail that produced an error (e.g. frame limit or unexpected function).
     /// Caller must send ACK and return this error.
     AckError(Error),
+    /// More than `max_bad_lrc` consecutive bad LRCs: caller returns this error.
+    BadLrcExhausted(Error),
     /// Event ignored.
     Ignore,
 }
@@ -216,19 +230,37 @@ pub(crate) enum ListTailStep {
 pub(crate) struct ListTailWait {
     expected: &'static str,
     frames: usize,
+    max_bad_lrc: u8,
+    bad_lrc: u8,
 }
 
 impl ListTailWait {
     /// Creates a new list tail waiter.
-    pub(crate) fn new(expected: &'static str, frames: usize) -> Self {
-        Self { expected, frames }
+    pub(crate) fn new(expected: &'static str, frames: usize, max_bad_lrc: u8) -> Self {
+        Self {
+            expected,
+            frames,
+            max_bad_lrc,
+            bad_lrc: 0,
+        }
     }
 
     /// Evaluates an incoming event in the detail tail.
     pub(crate) fn on_event(&mut self, event: LinkEvent) -> ListTailStep {
         match event {
-            LinkEvent::BadLrc { .. } => ListTailStep::SendNak,
+            LinkEvent::BadLrc { .. } => {
+                // Same limit as while waiting for a response (docs/protocol-spec.md §3.2).
+                self.bad_lrc = self.bad_lrc.saturating_add(1);
+                if self.bad_lrc > self.max_bad_lrc {
+                    ListTailStep::BadLrcExhausted(Error::BadLrc {
+                        count: self.bad_lrc,
+                    })
+                } else {
+                    ListTailStep::SendNak
+                }
+            }
             LinkEvent::Frame(payload) => {
+                self.bad_lrc = 0;
                 let text = decode_latin1(&payload);
                 match count_frame(self.frames) {
                     Ok(next_frames) => {
@@ -261,7 +293,7 @@ mod tests {
 
     #[test]
     fn ack_wait_transitions() {
-        let mut wait = AckWait::new(3);
+        let mut wait = AckWait::new(3, true);
         assert!(wait.next_attempt());
         assert_eq!(wait.attempt(), 1);
 
@@ -278,7 +310,7 @@ mod tests {
             AckStep::ImplicitAck(_)
         ));
 
-        let mut wait3 = AckWait::new(1);
+        let mut wait3 = AckWait::new(1, true);
         assert!(wait3.next_attempt());
         assert!(!wait3.next_attempt());
         assert!(matches!(
@@ -333,7 +365,7 @@ mod tests {
 
     #[test]
     fn list_tail_wait_transitions() {
-        let mut tail = ListTailWait::new("0261", 0);
+        let mut tail = ListTailWait::new("0261", 0, 3);
         assert!(matches!(
             tail.on_event(LinkEvent::BadLrc {
                 expected: 0,
@@ -356,7 +388,7 @@ mod tests {
 
     #[test]
     fn list_tail_wait_unexpected_function_returns_ack_error() {
-        let mut tail = ListTailWait::new("0261", 0);
+        let mut tail = ListTailWait::new("0261", 0, 3);
         let step = tail.on_event(LinkEvent::Frame(b"0810|00|WRONG".to_vec()));
         assert!(matches!(
             step,
@@ -366,7 +398,7 @@ mod tests {
 
     #[test]
     fn list_tail_wait_too_many_frames_returns_ack_error() {
-        let mut tail = ListTailWait::new("0261", 10_000);
+        let mut tail = ListTailWait::new("0261", 10_000, 3);
         let step = tail.on_event(LinkEvent::Frame(
             b"0261|00|5970|IT|ABC|757752|1000".to_vec(),
         ));
