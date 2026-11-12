@@ -321,7 +321,7 @@ Del SDK Node (`responseCodes.js`). Mensajes en español tal como los entrega Tra
 | 94 | Error al Procesar Respuesta | 87 | Confirmacion de cuotas |
 | 95 | Error al Imprimir TASA | 88 | Error Cantidad Cuotas |
 
-`is_approved()` es verdadero solo para `0` (y `90` en la inicialización de Autoservicio).
+`is_approved()` en las respuestas de POS Integrado es verdadero únicamente para el código `0` (`ResponseCode::Approved`); el código `90` (`ResponseCode::InitializationOk`) solo representa éxito en la respuesta de inicialización de Autoservicio (`InitializationResponse`, trama `1080`). El método genérico `ResponseCode::is_approved()` devuelve verdadero para ambos (`0` y `90`).
 
 ## 10. Preguntas abiertas (se cierran con un POS real — HW-01)
 

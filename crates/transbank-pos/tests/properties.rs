@@ -163,10 +163,12 @@ proptest! {
     fn any_numeric_response_code_parses(code in 0u16..=999) {
         let sale = parse_sale(&format!("0210|{code}|597029414300|T")).unwrap();
         prop_assert_eq!(sale.response_code.code(), code);
+        prop_assert_eq!(sale.is_approved(), code == 0);
         let totals = parse_totals(&format!("0710|{code:02}|0|0||")).unwrap();
         prop_assert_eq!(totals.response_code.code(), code);
+        prop_assert_eq!(totals.is_approved(), code == 0);
         let refund = parse_refund(&format!("1210|{code}|||||")).unwrap();
-        prop_assert_eq!(refund.is_approved(), code == 0 || code == 90);
+        prop_assert_eq!(refund.is_approved(), code == 0);
     }
 
     #[test]

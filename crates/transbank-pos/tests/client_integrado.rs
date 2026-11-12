@@ -89,6 +89,14 @@ fn declined_sale_is_ok() {
 }
 
 #[test]
+fn sale_with_initialization_ok_code_is_not_approved() {
+    let mut pos = pos_with(Scenario::RejectNextSale(90)).0;
+    let sale = pos.sale(&sale_request(12_000, "1")).unwrap();
+    assert!(!sale.is_approved());
+    assert_eq!(sale.response_code, ResponseCode::InitializationOk);
+}
+
+#[test]
 fn sale_with_status_reports_intermediate_messages() {
     let mut pos = pos_with(Scenario::Intermediate(vec![78, 81, 82])).0;
     let mut statuses = Vec::new();
