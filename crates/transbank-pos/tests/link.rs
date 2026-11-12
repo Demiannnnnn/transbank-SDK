@@ -333,6 +333,90 @@ fn detail_list_is_bounded() {
 }
 
 #[test]
+fn stray_stx_on_first_attempt_does_not_swallow_ack_on_retry() {
+    let clock = ManualClock::new();
+    let sale = encode_frame("0200|000012000|ABC123||0|0").unwrap();
+    let resp = encode_frame("0210|00|597029414300|IT750050").unwrap();
+    let transport = MemoryTransport::new(clock.clone())
+        .expect_write(&sale)
+        .then_reply(&[0x02]) // stray STX on attempt 1, no ACK
+        .expect_write(&sale) // attempt 2 after ack_timeout
+        .then_reply(&[ACK]) // the POS acknowledges attempt 2
+        .then_reply_after(Duration::from_secs(3), &resp)
+        .expect_write(&[ACK]);
+    let mut link = Link::with_clock(transport, LinkConfig::default(), clock);
+    let got = link
+        .request("0200|000012000|ABC123||0|0", "0210", &mut |_| {})
+        .unwrap();
+    assert_eq!(got, "0210|00|597029414300|IT750050");
+}
+
+/// A command without response ends only with an ACK: a frame (here with a bad
+/// LRC) arriving instead is discarded and the command is retried.
+#[test]
+fn command_without_response_ignores_frames_while_waiting_for_ack() {
+    let clock = ManualClock::new();
+    let poll = frame("0100");
+    let transport = MemoryTransport::new(clock.clone())
+        .expect_write(&poll)
+        .then_reply(&corrupted("0210|00"))
+        .expect_write(&poll)
+        .then_reply(&[ACK]);
+    let mut link = link(transport, &clock);
+    link.send_command("0100").unwrap();
+    assert!(link.transport_mut().is_finished());
+    assert_eq!(count_occurrences(link.transport_mut().written(), &poll), 2);
+}
+
+#[test]
+fn command_without_response_fails_when_only_frames_arrive() {
+    let clock = ManualClock::new();
+    let poll = frame("0100");
+    let transport = MemoryTransport::new(clock.clone())
+        .expect_write(&poll)
+        .then_reply(&frame("0210|00"))
+        .expect_write(&poll)
+        .then_reply(&frame("0210|00"))
+        .expect_write(&poll);
+    let mut link = link(transport, &clock);
+    assert!(matches!(
+        link.send_command("0100"),
+        Err(Error::NoAck { attempts: 3, .. })
+    ));
+}
+
+#[test]
+fn intermediate_messages_do_not_extend_the_list_deadline() {
+    let clock = ManualClock::new();
+    let transport = MemoryTransport::new(clock.clone())
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK])
+        .then_reply_after(Duration::from_secs(100), &frame("0900|78"))
+        .expect_write(&[ACK])
+        .then_reply_after(Duration::from_secs(100), &frame("0900|81"));
+    let mut link = link(transport, &clock);
+    let result = link.request_list("0260|1|", "0261");
+    assert!(matches!(result, Err(Error::ResponseTimeout { .. })));
+    assert_eq!(clock.now(), Duration::from_secs(150));
+}
+
+#[test]
+fn detail_tail_fails_after_more_than_max_bad_lrc() {
+    let clock = ManualClock::new();
+    let mut transport = list_script(&clock, &[END.to_owned()]);
+    for _ in 0..3 {
+        transport = transport.then_reply(&corrupted(END)).expect_write(&[NAK]);
+    }
+    transport = transport.then_reply(&corrupted(END));
+    let mut link = link(transport, &clock);
+    assert!(matches!(
+        link.request_list("0260|1|", "0261"),
+        Err(Error::BadLrc { count: 4 })
+    ));
+    assert!(link.transport_mut().is_finished());
+}
+
+#[test]
 fn link_is_send() {
     fn assert_send<T: Send>() {}
     assert_send::<Link<MemoryTransport, ManualClock>>();

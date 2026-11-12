@@ -2,20 +2,20 @@
 
 > **Unofficial — not affiliated with, endorsed or supported by Transbank S.A.** "Transbank" is a trademark of its owner and is used only to describe compatibility. The protocol was derived from the official SDKs (BSD-3-Clause, see [NOTICE](NOTICE)). Always validate with your own terminal before charging real money.
 
-Rust SDK for the **Transbank POS terminals** of Chile (POS Integrado: Verifone VX520/VX520c, Ingenico Desk 3500) connected by USB/serial port or through a TCP bridge:
+Rust SDK for the **Transbank POS terminals** of Chile (POS Integrado: Verifone VX520/VX520c, Ingenico Desk 3500; POS Autoservicio) connected by USB/serial port or through a TCP bridge:
 
 - sans-IO protocol core: frame encoder/decoder (`STX payload ETX LRC`), typed requests and responses;
 - link layer with ACK/NAK, retransmission of unacknowledged frames and configurable timeouts — an acknowledged sale is **never** resent;
-- `PosIntegrado` client: poll, load keys, sale (with intermediate messages), multi-code sale, last sale, refund, totals, sales detail, close;
+- `PosIntegrado` and `PosAutoservicio` clients (poll, load keys, initialize, sale, refund, close...);
 - serial (feature `serial`, default), TCP and in-memory transports; a simulator in the [`transbank-pos-sim`](https://crates.io/crates/transbank-pos-sim) crate.
 
-**Status:** early development, **not yet validated against a real terminal**. The API may change before 0.1.0.
+**Status:** 1.0. Tested end to end against the bundled simulator (an extensive test suite (property and mutation testing of the 1.0 core)), but **never tested against a real Transbank terminal**. Reports from anyone with a POS are welcome.
 
 ## Installation
 
 ```toml
 [dependencies]
-transbank-pos = "0.1"
+transbank-pos = "1"
 ```
 
 On Linux, listing USB ports needs `libudev` (`libudev-dev` / `systemd-devel`) and access to the port (`dialout` or `uucp` group).
@@ -41,6 +41,19 @@ match pos.sale_with_status(&request, |status| eprintln!("POS: {}", status.messag
 
 Runnable examples (against `tbk-pos-sim` or a terminal): `cargo run --example sale` with `TBK_POS_TCP=127.0.0.1:7777` or `TBK_POS_PORT=/dev/ttyACM0`.
 
+### Async API (Tokio)
+
+With the optional `tokio` feature enabled, `transbank-pos` provides an asynchronous client and link layer (`transbank_pos::tokio`):
+
+```rust
+use transbank_pos::SaleRequest;
+use transbank_pos::tokio::AsyncPosIntegrado;
+
+let mut pos = AsyncPosIntegrado::connect_tcp("127.0.0.1:7777").await?;
+pos.poll().await?;
+let sale = pos.sale(&SaleRequest::new(12_000, "ABC123")?).await?;
+```
+
 ## Features
 
 | Feature | Default | Enables |
@@ -48,6 +61,8 @@ Runnable examples (against `tbk-pos-sim` or a terminal): `cargo run --example sa
 | `serial` | yes | `serial::SerialTransport`, `list_ports`, `PosIntegrado::open` / `autoconnect` |
 | `serde` | no | `Serialize` for responses, `Deserialize` for requests |
 | `tracing` | no | link events (`transbank_pos::link`), sensitive fields redacted |
+| `tokio` | no | Asynchronous API (`transbank_pos::tokio::{AsyncLink, AsyncPosIntegrado}`) |
+| `tokio-serial` | no | Asynchronous serial transport (`AsyncPosIntegrado::open_serial`) |
 
 MSRV: Rust 1.85. No `unsafe`, no panics on POS input, integer CLP amounts.
 

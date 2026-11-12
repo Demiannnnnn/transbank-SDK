@@ -10,20 +10,17 @@ use std::time::Duration;
 
 use crate::codes::IntermediateStatus;
 use crate::error::{Error, Result};
-use crate::message::parse_intermediate;
-use crate::protocol::{
-    ACK, FC_INTERMEDIATE, FrameDecoder, LinkEvent, NAK, decode_latin1, encode_frame,
+#[cfg(feature = "tracing")]
+use crate::exchange::function_code;
+use crate::exchange::{
+    AckStep, AckWait, ListTailStep, ListTailWait, ResponseStep, ResponseWait, count_frame,
+    is_list_terminator,
 };
+use crate::protocol::{ACK, FrameDecoder, LinkEvent, NAK, encode_frame};
 use crate::transport::{Clock, SystemClock, Transport};
-
-/// Maximum number of frames accepted in a multi-frame response (SAFE-02).
-const MAX_LIST_FRAMES: usize = 10_000;
 
 /// Size of the read buffer.
 const READ_CHUNK: usize = 512;
-
-/// Index of the authorization code in a detail entry (`0261`, `0291`).
-const DETAIL_AUTHORIZATION_FIELD: usize = 5;
 
 macro_rules! link_debug {
     ($($arg:tt)*) => {
@@ -78,6 +75,14 @@ enum Received {
     Response(String),
 }
 
+/// Layout used to redact sensitive fields in traces (`security-model.md` §3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum TraceLayout {
+    #[default]
+    Integrado,
+    Autoservicio,
+}
+
 /// Low-level link with the POS: framing, ACK/NAK, retries and timeouts.
 ///
 /// The clients (`PosIntegrado`, `PosAutoservicio`) use it internally; it is public
@@ -108,6 +113,7 @@ pub struct Link<T: Transport, C: Clock = SystemClock> {
     decoder: FrameDecoder,
     events: VecDeque<LinkEvent>,
     scratch: Vec<LinkEvent>,
+    trace_layout: TraceLayout,
 }
 
 impl<T: Transport> Link<T> {
@@ -130,7 +136,12 @@ impl<T: Transport, C: Clock> Link<T, C> {
             decoder: FrameDecoder::new(),
             events: VecDeque::new(),
             scratch: Vec::new(),
+            trace_layout: TraceLayout::Integrado,
         }
+    }
+
+    pub(crate) fn set_trace_layout(&mut self, layout: TraceLayout) {
+        self.trace_layout = layout;
     }
 
     /// Sends a command and waits only for its ACK (`0100`, `0300`, `0260|0|`…).
@@ -141,7 +152,7 @@ impl<T: Transport, C: Clock> Link<T, C> {
     /// [`Error::NoAck`] after `max_attempts` transmissions, or a transport error.
     pub fn send_command(&mut self, payload: &str) -> Result<()> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame)
+        self.send_frame(&frame, false)
     }
 
     /// Sends a command, waits for its ACK and for the response `expected`
@@ -162,7 +173,7 @@ impl<T: Transport, C: Clock> Link<T, C> {
         on_status: &mut dyn FnMut(IntermediateStatus),
     ) -> Result<String> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame)?;
+        self.send_frame(&frame, true)?;
         let deadline = self.deadline(self.config.response_timeout);
         loop {
             match self.receive(expected, deadline, self.config.response_timeout)? {
@@ -185,15 +196,18 @@ impl<T: Transport, C: Clock> Link<T, C> {
     /// 10 000 frames.
     pub fn request_list(&mut self, payload: &str, expected: &'static str) -> Result<Vec<String>> {
         let frame = encode_frame(payload)?;
-        self.send_frame(&frame)?;
+        self.send_frame(&frame, true)?;
         let mut entries = Vec::new();
         let mut frames = 0usize;
+        // Each list frame gets a fresh `response_timeout`; a `0900` does not extend it
+        // (docs/protocol-spec.md §3.2 step 4).
+        let mut deadline = self.deadline(self.config.response_timeout);
         loop {
-            let deadline = self.deadline(self.config.response_timeout);
             let response = match self.receive(expected, deadline, self.config.response_timeout)? {
                 Received::Status(_) => continue,
                 Received::Response(response) => response,
             };
+            deadline = self.deadline(self.config.response_timeout);
             frames = count_frame(frames)?;
             if is_list_terminator(&response) {
                 break;
@@ -227,29 +241,35 @@ impl<T: Transport, C: Clock> Link<T, C> {
         &mut self,
         expected: &'static str,
         entries: &mut Vec<String>,
-        mut frames: usize,
+        frames: usize,
     ) -> Result<()> {
+        let mut wait = ListTailWait::new(expected, frames, self.config.max_bad_lrc);
+        // The tail ends after `detail_tail` without frames: ignored events do not renew it.
+        let mut deadline = self.deadline(self.config.detail_tail);
         loop {
-            let deadline = self.deadline(self.config.detail_tail);
             let Some(event) = self.next_event(deadline)? else {
                 return Ok(());
             };
-            let LinkEvent::Frame(payload) = event else {
-                // NAK on a bad LRC so the POS retransmits; anything else is ignored.
-                if matches!(event, LinkEvent::BadLrc { .. }) {
+            match wait.on_event(event) {
+                ListTailStep::SendNak => {
                     self.transport.write_all(&[NAK])?;
+                    deadline = self.deadline(self.config.detail_tail);
                 }
-                continue;
-            };
-            self.transport.write_all(&[ACK])?;
-            frames = count_frame(frames)?;
-            let text = decode_latin1(&payload);
-            let function_code = function_code(&text);
-            if function_code != expected {
-                return Err(unexpected(expected, &text));
-            }
-            if !is_list_terminator(&text) {
-                entries.push(text);
+                ListTailStep::BadLrcExhausted(err) => return Err(err),
+                ListTailStep::AckEntry(text) => {
+                    self.transport.write_all(&[ACK])?;
+                    entries.push(text);
+                    deadline = self.deadline(self.config.detail_tail);
+                }
+                ListTailStep::AckTerminator => {
+                    self.transport.write_all(&[ACK])?;
+                    deadline = self.deadline(self.config.detail_tail);
+                }
+                ListTailStep::AckError(err) => {
+                    self.transport.write_all(&[ACK])?;
+                    return Err(err);
+                }
+                ListTailStep::Ignore => {}
             }
         }
     }
@@ -259,43 +279,49 @@ impl<T: Transport, C: Clock> Link<T, C> {
     /// A valid frame received while waiting for the ACK means the POS accepted the
     /// command and the ACK was lost: it is kept for the response and treated as an
     /// implicit ACK, so the command is never written again (LINK-03).
-    fn send_frame(&mut self, frame: &[u8]) -> Result<()> {
+    fn send_frame(&mut self, frame: &[u8], implicit_ack: bool) -> Result<()> {
         self.transport.discard_input()?;
         self.decoder.reset();
         self.events.clear();
-        let attempts = self.config.max_attempts.max(1);
-        let mut naks = 0u8;
-        let mut attempt = 0u8;
-        while attempt < attempts {
-            attempt += 1;
+        let mut wait = AckWait::new(self.config.max_attempts, implicit_ack);
+        while wait.next_attempt() {
+            if wait.attempt() > 1 {
+                // A partial frame left by the previous attempt (e.g. a stray STX)
+                // would swallow the ACK of this one (LINK-02, LINK-03).
+                self.decoder.reset();
+            }
+            let attempt = wait.attempt();
+            let _ = attempt;
             self.transport.write_all(frame)?;
             link_debug!(len = frame.len(), attempt, "frame sent");
             let deadline = self.deadline(self.config.ack_timeout);
             loop {
-                match self.next_event(deadline)? {
-                    Some(LinkEvent::Ack) => {
+                let step = if let Some(event) = self.next_event(deadline)? {
+                    wait.on_event(event)
+                } else {
+                    link_debug!("ACK timeout");
+                    AckStep::Timeout
+                };
+                match step {
+                    AckStep::Acked => {
                         link_debug!("ACK received");
                         return Ok(());
                     }
-                    Some(LinkEvent::Nak) => {
+                    AckStep::Nak => {
                         link_debug!("NAK received");
-                        naks = naks.saturating_add(1);
                         break;
                     }
-                    Some(event @ (LinkEvent::Frame(_) | LinkEvent::BadLrc { .. })) => {
+                    AckStep::ImplicitAck(event) => {
                         link_debug!("frame received before ACK: implicit ACK");
                         self.events.push_front(event);
                         return Ok(());
                     }
-                    Some(_) => {}
-                    None => {
-                        link_debug!("ACK timeout");
-                        break;
-                    }
+                    AckStep::Timeout => break,
+                    AckStep::Ignore => {}
                 }
             }
         }
-        Err(Error::NoAck { attempts, naks })
+        Err(wait.no_ack_error())
     }
 
     /// Waits for the next valid frame until `deadline`: acknowledges it, NAKs bad
@@ -306,35 +332,39 @@ impl<T: Transport, C: Clock> Link<T, C> {
         deadline: Duration,
         waited: Duration,
     ) -> Result<Received> {
-        let mut bad_lrc = 0u8;
+        let mut wait = ResponseWait::new(self.config.max_bad_lrc, expected);
         loop {
-            match self.next_event(deadline)? {
-                None => {
-                    link_debug!("response timeout");
-                    return Err(Error::ResponseTimeout { waited });
-                }
-                Some(LinkEvent::BadLrc { .. }) => {
-                    bad_lrc = bad_lrc.saturating_add(1);
-                    link_debug!(count = bad_lrc, "bad LRC");
-                    if bad_lrc > self.config.max_bad_lrc {
-                        return Err(Error::BadLrc { count: bad_lrc });
-                    }
+            let Some(event) = self.next_event(deadline)? else {
+                link_debug!("response timeout");
+                return Err(Error::ResponseTimeout { waited });
+            };
+            match wait.on_event(event)? {
+                ResponseStep::SendNak { count } => {
+                    let _ = count;
+                    link_debug!(count, "bad LRC");
                     self.transport.write_all(&[NAK])?;
                 }
-                Some(LinkEvent::Frame(payload)) => {
-                    self.transport.write_all(&[ACK])?;
-                    let text = decode_latin1(&payload);
-                    trace_payload(&text);
-                    let function_code = function_code(&text);
-                    if function_code == FC_INTERMEDIATE {
-                        return parse_intermediate(&text).map(Received::Status);
-                    }
-                    if function_code == expected {
-                        return Ok(Received::Response(text));
-                    }
-                    return Err(unexpected(expected, &text));
+                ResponseStep::BadLrcExhausted { count, error } => {
+                    let _ = count;
+                    link_debug!(count, "bad LRC");
+                    return Err(error);
                 }
-                Some(_) => {}
+                ResponseStep::AckStatus { text, status } => {
+                    self.transport.write_all(&[ACK])?;
+                    trace_payload(&text, self.trace_layout);
+                    return Ok(Received::Status(status));
+                }
+                ResponseStep::AckResponse { text } => {
+                    self.transport.write_all(&[ACK])?;
+                    trace_payload(&text, self.trace_layout);
+                    return Ok(Received::Response(text));
+                }
+                ResponseStep::AckUnexpected { text, error } => {
+                    self.transport.write_all(&[ACK])?;
+                    trace_payload(&text, self.trace_layout);
+                    return Err(error);
+                }
+                ResponseStep::Ignore => {}
             }
         }
     }
@@ -362,55 +392,33 @@ impl<T: Transport, C: Clock> Link<T, C> {
     }
 }
 
-fn count_frame(frames: usize) -> Result<usize> {
-    let frames = frames.saturating_add(1);
-    if frames > MAX_LIST_FRAMES {
-        return Err(Error::TooManyFrames {
-            max: MAX_LIST_FRAMES,
-        });
-    }
-    Ok(frames)
-}
-
-fn function_code(payload: &str) -> &str {
-    payload.split('|').next().unwrap_or_default().trim()
-}
-
-fn unexpected(expected: &'static str, payload: &str) -> Error {
-    Error::UnexpectedResponse {
-        expected,
-        received: function_code(payload).to_owned(),
-        payload: payload.to_owned(),
-    }
-}
-
-/// A detail entry without authorization code ends the list.
-fn is_list_terminator(payload: &str) -> bool {
-    payload
-        .split('|')
-        .nth(DETAIL_AUTHORIZATION_FIELD)
-        .is_none_or(|field| field.trim().is_empty())
-}
-
 #[cfg(feature = "tracing")]
-fn trace_payload(payload: &str) {
-    tracing::trace!(target: "transbank_pos::link", payload = %redact(payload), "frame received");
+pub(crate) fn trace_payload(payload: &str, layout: TraceLayout) {
+    tracing::trace!(target: "transbank_pos::link", payload = %redact(payload, layout), "frame received");
 }
 
 #[cfg(not(feature = "tracing"))]
-fn trace_payload(_payload: &str) {}
+pub(crate) fn trace_payload(_payload: &str, _layout: TraceLayout) {}
 
 /// Replaces the account number and voucher fields by `<redacted N>` according to the
 /// layout of the function code (`security-model.md` §3).
 #[cfg(feature = "tracing")]
-fn redact(payload: &str) -> String {
-    let sensitive: &[usize] = match function_code(payload) {
-        "0210" | "0260" | "0271" | "0281" => &[13, 19],
-        "0291" => &[13],
-        "0261" => &[11],
-        "0510" => &[4],
-        "0710" | "0810" | "1210" | "0900" => &[],
-        other => return format!("<fc={other}, len={}>", payload.len()),
+fn redact(payload: &str, layout: TraceLayout) -> String {
+    let sensitive: &[usize] = match layout {
+        TraceLayout::Integrado => match function_code(payload) {
+            "0210" | "0260" | "0271" | "0281" => &[13, 19],
+            "0291" => &[13],
+            "0261" => &[11],
+            "0510" => &[4],
+            "0710" | "0810" | "1210" | "0900" => &[],
+            other => return format!("<fc={other}, len={}>", payload.len()),
+        },
+        TraceLayout::Autoservicio => match function_code(payload) {
+            "0210" | "0260" | "0271" => &[11, 15],
+            "0510" => &[4],
+            "0810" | "1210" | "0900" | "1080" => &[],
+            other => return format!("<fc={other}, len={}>", payload.len()),
+        },
     };
     payload
         .split('|')
@@ -428,17 +436,38 @@ fn redact(payload: &str) -> String {
 
 #[cfg(all(test, feature = "tracing"))]
 mod redact_tests {
-    use super::redact;
+    use super::{TraceLayout, redact};
 
     #[test]
     fn redacts_by_layout() {
         assert_eq!(
             redact(
-                "0210|00|1|T|t|a|1|0|0|1234|1|CR|01012025|ACCOUNT|MC|01012025|101010|1|0|VOUCHER"
+                "0210|00|1|T|t|a|1|0|0|1234|1|CR|01012025|ACCOUNT|MC|01012025|101010|1|0|VOUCHER",
+                TraceLayout::Integrado
             ),
             "0210|00|1|T|t|a|1|0|0|1234|1|CR|01012025|<redacted 7>|MC|01012025|101010|1|0|<redacted 7>"
         );
-        assert_eq!(redact("9999|secret"), "<fc=9999, len=11>");
-        assert_eq!(redact("0710|00|2|100"), "0710|00|2|100");
+        assert_eq!(
+            redact("9999|secret", TraceLayout::Integrado),
+            "<fc=9999, len=11>"
+        );
+        assert_eq!(
+            redact("0710|00|2|100", TraceLayout::Integrado),
+            "0710|00|2|100"
+        );
+
+        let fixture = "0210|00|597029414300|IM750164|123456|776549|10000|6590|58|CR|18032026|0000000000000000000|VI|18032026|123506|VOUCHER1234|03|03|3334|CUOTAS SIN INTERES";
+        assert_eq!(
+            redact(fixture, TraceLayout::Autoservicio),
+            "0210|00|597029414300|IM750164|123456|776549|10000|6590|58|CR|18032026|<redacted 19>|VI|18032026|123506|<redacted 11>|03|03|3334|CUOTAS SIN INTERES"
+        );
+        assert_eq!(
+            redact("1080|90|03022026|111543", TraceLayout::Autoservicio),
+            "1080|90|03022026|111543"
+        );
+        assert_eq!(
+            redact("1080|90|03022026|111543", TraceLayout::Integrado),
+            "<fc=1080, len=23>"
+        );
     }
 }

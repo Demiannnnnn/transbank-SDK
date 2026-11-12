@@ -77,7 +77,7 @@ Los escenarios "próximos N" se consumen y luego vuelve a `Approve`.
 | `0260|0|` | solo ACK |
 | `0500` | `0510|00|597029414300|SIM00001|`; borra las ventas |
 
-Autoservicio (AUTO-01): `0070` ACK, `0080` ⇒ `1080|90|{fecha}|{hora}`; venta con layout §7.1; `1200` anula la última.
+Autoservicio (AUTO-01): `0070` ACK, `0080` ⇒ `1080|90|{fecha}|{hora}`; venta con layout §7.1; `1200` anula la última (sin ventas ⇒ 5, anulada ⇒ 4, débito ⇒ 8: esta regla se hereda de Integrado, §7 no la define). Layout estricto: otra forma de un comando de §7 ⇒ código 61. Comandos fuera de §7 ⇒ código 12.
 
 Fechas: el simulador usa una fecha/hora fija configurable (`with_clock_fixed(PosDate, PosTime)`), por defecto `01012026`/`120000`, para que los tests sean deterministas.
 

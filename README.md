@@ -4,7 +4,7 @@ SDK **no oficial** en Rust para comunicarse con los terminales **POS de Transban
 
 > ⚠️ **Proyecto no oficial.** No está afiliado, respaldado ni soportado por Transbank S.A. El protocolo se derivó de los [SDKs oficiales de Transbank](https://github.com/TransbankDevelopers) (BSD-3-Clause; ver [`NOTICE`](NOTICE)). Úsalo bajo tu responsabilidad y valida siempre con tu terminal antes de cobrar de verdad.
 
-> Estado: **implementado, sin validar con un POS real.** Protocolo, enlace, cliente `PosIntegrado`, transportes, simulador y CLI listos y probados contra el simulador; falta la validación con hardware (HW-01) y POS Autoservicio. Detalle en [`.ai-context/implementation-status.md`](.ai-context/implementation-status.md) y [`tasks/README.md`](tasks/README.md). Aún no publicado en crates.io.
+> Estado: **implementado, sin validar con un POS real.** Protocolo, enlace, cliente `PosIntegrado`, transportes, simulador y CLI listos y probados contra el simulador; `PosAutoservicio` también, solo contra el simulador; falta la validación con hardware (HW-01). Detalle en [`.ai-context/implementation-status.md`](.ai-context/implementation-status.md) y [`tasks/README.md`](tasks/README.md). Aún no publicado en crates.io.
 
 ## Qué ofrece (v0.1)
 

@@ -10,7 +10,7 @@ use serialport::{
     ClearBuffer, DataBits, FlowControl, Parity, SerialPort, SerialPortType, StopBits,
 };
 
-use crate::client::PosIntegrado;
+use crate::client::{PosAutoservicio, PosIntegrado};
 use crate::error::{Error, Result};
 use crate::transport::Transport;
 
@@ -214,6 +214,20 @@ pub fn order_candidates(ports: Vec<PortInfo>) -> Vec<PortInfo> {
         (a.kind != PortKind::Usb, &a.name).cmp(&(b.kind != PortKind::Usb, &b.name))
     });
     ports
+}
+
+impl PosAutoservicio<SerialTransport> {
+    /// Opens the POS Autoservicio at `path` with 19200 baud.
+    ///
+    /// # Errors
+    ///
+    /// Those of [`SerialTransport::open`].
+    pub fn open(path: &str) -> Result<Self> {
+        Ok(Self::new(SerialTransport::open(
+            path,
+            DEFAULT_BAUD_AUTOSERVICIO,
+        )?))
+    }
 }
 
 impl PosIntegrado<SerialTransport> {

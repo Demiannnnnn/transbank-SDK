@@ -20,7 +20,7 @@ Tú (Claude Code) eres el **orquestador** de este repositorio, no el implementad
 
 - Todo lo del producto (§6 calidad, §7 dependencias/seguridad/licencias, §8 terminado) aplica a lo que aceptas: nunca integres trabajo que lo viole.
 - **Nunca** toques `main` ni `develop` (los integra el dueño), ni el checkout del dueño `../transbank-SDK`.
-- **Nunca** `cargo publish`, tags ni releases: publica el dueño (`0.0.x` de reserva tras PROTO-01, `0.1.0` tras HW-01; `docs/release.md`).
+- **Nunca** `cargo publish`, tags ni releases: publica el dueño (`docs/release.md`; 1.0.0 decidida el 2026-10-22).
 
 ## Antes de empezar una sesión
 

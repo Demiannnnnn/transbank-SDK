@@ -45,8 +45,8 @@ tasks/
 | 8 | [CLI-01](cli/task-01-cli.md) | CLI `tbk-pos` | CLIENT-01, SERIAL-01 | P1 | ✅ |
 | 9 | [DOCS-01](docs/task-01-docs-and-release-prep.md) | Rustdoc, ejemplos, READMEs de crates, CHANGELOG, `publish --dry-run` | CLI-01 | P1 | ✅ |
 | 10 | [HW-01](hw/task-01-hardware-validation.md) | Validación con POS real (**dueño**) | CLI-01 | P0 para publicar | ⬜ |
-| 11 | [AUTO-01](auto/task-01-autoservicio.md) | POS Autoservicio (cliente + simulador + CLI) | CLIENT-01, SIM-01 | P2 | ⬜ |
-| 12 | [ASYNC-01](async/task-01-tokio.md) | API async con tokio | CLIENT-01, SERIAL-01 | P2 | ⬜ |
+| 11 | [AUTO-01](auto/task-01-autoservicio.md) | POS Autoservicio (cliente + simulador + CLI) | CLIENT-01, SIM-01 | P2 | ✅ |
+| 12 | [ASYNC-01](async/task-01-tokio.md) | API async con tokio | CLIENT-01, SERIAL-01 | P2 | ✅ |
 
 **Paralelismo posible:** SERIAL-01 ∥ AUTO-01 (tras CLIENT-01); AUTO-01 ∥ ASYNC-01. El núcleo (INFRA → PROTO → LINK → SIM → CLIENT) es secuencial.
 
@@ -54,7 +54,7 @@ tasks/
 
 | ID | Tarea | Notas |
 |:--|:--|:--|
-| REL-01 | Publicar en crates.io | Solo con autorización del dueño tras HW-01 (`docs/release.md`) |
+| REL-01 | Publicar en crates.io | El dueño publica 1.0.0 sin HW-01 (decisión 2026-10-22, `docs/release.md`) |
 | INT-01 | Integrar en `rework-sistema-facturacion` (app Tauri: cobro con POS en la venta) | Se especifica en ese repo; consume la versión publicada o `git` |
 | FUT-01 | Bluetooth / POS Android de Transbank | Investigar si hay protocolo documentado |
 

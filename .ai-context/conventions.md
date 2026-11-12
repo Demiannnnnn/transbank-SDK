@@ -49,6 +49,7 @@
 | `serde` | no | `Serialize` en respuestas y tipos; `Deserialize` en requests y tipos de entrada |
 | `tracing` | no | Eventos `tracing` en el enlace (security-model §3) |
 | `tokio` | no | API async (ASYNC-01) |
+| `tokio-serial` | no | `tokio` + `serial`: `AsyncPosIntegrado::open_serial` |
 
 ## 5. Tests
 
