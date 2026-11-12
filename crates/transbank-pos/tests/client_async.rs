@@ -92,7 +92,7 @@ async fn every_method_of_client() {
 
     // 10. sales_detail
     let printed = pos.sales_detail(SalesDetailMode::PrintOnPos).await.unwrap();
-    assert!(printed.is_empty());
+    assert_eq!(printed.len(), 0);
     let detail_entries = pos.sales_detail(SalesDetailMode::SendToHost).await.unwrap();
     assert_eq!(detail_entries.len(), 4);
 
@@ -101,7 +101,7 @@ async fn every_method_of_client() {
         .multicode_sales_detail(SalesDetailMode::PrintOnPos)
         .await
         .unwrap();
-    assert!(multi_printed.is_empty());
+    assert_eq!(multi_printed.len(), 0);
     let multi_detail = pos
         .multicode_sales_detail(SalesDetailMode::SendToHost)
         .await
@@ -238,7 +238,7 @@ async fn sales_detail_with_and_without_sales() {
 
     // Without sales
     let entries = pos.sales_detail(SalesDetailMode::SendToHost).await.unwrap();
-    assert!(entries.is_empty());
+    assert_eq!(entries.len(), 0);
 
     // Make 2 sales
     pos.sale(&SaleRequest::new(10_000, "D01").unwrap())
