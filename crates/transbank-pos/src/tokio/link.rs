@@ -180,13 +180,16 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
         self.send_frame(&frame, true).await?;
         let mut entries = Vec::new();
         let mut frames = 0usize;
+        let waited = self.config.response_timeout;
+        // Each list frame gets a fresh `response_timeout`; a `0900` does not extend it
+        // (docs/protocol-spec.md §3.2 step 4).
+        let mut deadline = Self::deadline(waited);
         loop {
-            let waited = self.config.response_timeout;
-            let deadline = Self::deadline(waited);
             let response = match self.receive(expected, deadline, waited).await? {
                 Received::Status(_) => continue,
                 Received::Response(response) => response,
             };
+            deadline = Self::deadline(waited);
             frames = count_frame(frames)?;
             if is_list_terminator(&response) {
                 break;

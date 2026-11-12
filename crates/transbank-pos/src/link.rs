@@ -199,12 +199,15 @@ impl<T: Transport, C: Clock> Link<T, C> {
         self.send_frame(&frame, true)?;
         let mut entries = Vec::new();
         let mut frames = 0usize;
+        // Each list frame gets a fresh `response_timeout`; a `0900` does not extend it
+        // (docs/protocol-spec.md §3.2 step 4).
+        let mut deadline = self.deadline(self.config.response_timeout);
         loop {
-            let deadline = self.deadline(self.config.response_timeout);
             let response = match self.receive(expected, deadline, self.config.response_timeout)? {
                 Received::Status(_) => continue,
                 Received::Response(response) => response,
             };
+            deadline = self.deadline(self.config.response_timeout);
             frames = count_frame(frames)?;
             if is_list_terminator(&response) {
                 break;

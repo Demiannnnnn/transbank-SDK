@@ -386,6 +386,21 @@ fn command_without_response_fails_when_only_frames_arrive() {
 }
 
 #[test]
+fn intermediate_messages_do_not_extend_the_list_deadline() {
+    let clock = ManualClock::new();
+    let transport = MemoryTransport::new(clock.clone())
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK])
+        .then_reply_after(Duration::from_secs(100), &frame("0900|78"))
+        .expect_write(&[ACK])
+        .then_reply_after(Duration::from_secs(100), &frame("0900|81"));
+    let mut link = link(transport, &clock);
+    let result = link.request_list("0260|1|", "0261");
+    assert!(matches!(result, Err(Error::ResponseTimeout { .. })));
+    assert_eq!(clock.now(), Duration::from_secs(150));
+}
+
+#[test]
 fn link_is_send() {
     fn assert_send<T: Send>() {}
     assert_send::<Link<MemoryTransport, ManualClock>>();

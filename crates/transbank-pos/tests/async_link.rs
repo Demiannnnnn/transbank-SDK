@@ -1050,6 +1050,21 @@ async fn command_without_response_ignores_frames_while_waiting_for_ack() {
     assert!(l.stream_mut().is_finished());
 }
 
+#[tokio::test(start_paused = true)]
+async fn intermediate_messages_do_not_extend_the_list_deadline() {
+    let stream = AsyncScriptedStream::new()
+        .expect_write(&frame("0260|1|"))
+        .then_reply(&[ACK])
+        .then_reply_after(Duration::from_secs(100), &frame("0900|78"))
+        .expect_write(&[ACK])
+        .then_reply_after(Duration::from_secs(100), &frame("0900|81"));
+    let mut l = link(stream);
+    let start = tokio::time::Instant::now();
+    let result = l.request_list("0260|1|", "0261").await;
+    assert!(matches!(result, Err(Error::ResponseTimeout { .. })));
+    assert_eq!(start.elapsed().as_secs(), 150);
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 
