@@ -1,1 +1,20 @@
-/target
+# Rust / Cargo
+/target/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS & editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local logs / traces
+*.log
+
