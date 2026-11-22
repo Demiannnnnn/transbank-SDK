@@ -65,6 +65,152 @@ pub enum SimRequest {
     Unknown(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SimAutoservicioRequest {
+    Poll,
+    Initialize,
+    InitializationResult,
+    LoadKeys,
+    Sale(SaleArgs),
+    MultiCodeSale {
+        sale: SaleArgs,
+        commerce_code: String,
+    },
+    LastSale {
+        voucher: bool,
+    },
+    Refund,
+    Close {
+        voucher: bool,
+    },
+    Unsupported(String),
+}
+
+fn parse_bool_flag(value: &str, field: &'static str, payload: &str) -> Result<bool> {
+    match value {
+        "0" => Ok(false),
+        "1" => Ok(true),
+        _ => Err(Error::Parse {
+            field,
+            value: value.to_owned(),
+            payload: payload.to_owned(),
+        }),
+    }
+}
+
+fn ensure_single_field(fields: &[&str], payload: &str) -> Result<()> {
+    if fields.len() != 1 {
+        return Err(Error::Parse {
+            field: "fields",
+            value: payload.to_owned(),
+            payload: payload.to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn parse_autoservicio_sale(fields: &[&str], payload: &str) -> Result<SaleArgs> {
+    if fields.len() != 5 {
+        return Err(Error::Parse {
+            field: "fields",
+            value: payload.to_owned(),
+            payload: payload.to_owned(),
+        });
+    }
+    let amount = number(fields, 1, "amount", payload)?;
+    let ticket = text(fields, 2).to_owned();
+    let voucher = parse_bool_flag(text(fields, 3), "voucher", payload)?;
+    let status = parse_bool_flag(text(fields, 4), "status", payload)?;
+    Ok(SaleArgs {
+        amount,
+        ticket,
+        voucher,
+        status,
+    })
+}
+
+fn parse_autoservicio_multicode(fields: &[&str], payload: &str) -> Result<SimAutoservicioRequest> {
+    if fields.len() != 6 {
+        return Err(Error::Parse {
+            field: "fields",
+            value: payload.to_owned(),
+            payload: payload.to_owned(),
+        });
+    }
+    let amount = number(fields, 1, "amount", payload)?;
+    let ticket = text(fields, 2).to_owned();
+    let voucher = parse_bool_flag(text(fields, 3), "voucher", payload)?;
+    let status = parse_bool_flag(text(fields, 4), "status", payload)?;
+    let commerce_code = text(fields, 5).to_owned();
+    Ok(SimAutoservicioRequest::MultiCodeSale {
+        sale: SaleArgs {
+            amount,
+            ticket,
+            voucher,
+            status,
+        },
+        commerce_code,
+    })
+}
+
+pub(crate) fn parse_autoservicio_request(payload: &str) -> Result<SimAutoservicioRequest> {
+    let fields: Vec<&str> = payload.split('|').collect();
+    let fc = fields.first().copied().unwrap_or("");
+    match fc {
+        "0100" => {
+            ensure_single_field(&fields, payload)?;
+            Ok(SimAutoservicioRequest::Poll)
+        }
+        "0070" => {
+            ensure_single_field(&fields, payload)?;
+            Ok(SimAutoservicioRequest::Initialize)
+        }
+        "0080" => {
+            ensure_single_field(&fields, payload)?;
+            Ok(SimAutoservicioRequest::InitializationResult)
+        }
+        "0800" => {
+            ensure_single_field(&fields, payload)?;
+            Ok(SimAutoservicioRequest::LoadKeys)
+        }
+        "0200" => parse_autoservicio_sale(&fields, payload).map(SimAutoservicioRequest::Sale),
+        "0270" => parse_autoservicio_multicode(&fields, payload),
+        "0250" => {
+            if fields.len() != 2 {
+                return Err(Error::Parse {
+                    field: "fields",
+                    value: payload.to_owned(),
+                    payload: payload.to_owned(),
+                });
+            }
+            let voucher = parse_bool_flag(text(&fields, 1), "voucher", payload)?;
+            Ok(SimAutoservicioRequest::LastSale { voucher })
+        }
+        "1200" => {
+            if payload != "1200" {
+                return Err(Error::Parse {
+                    field: "fields",
+                    value: payload.to_owned(),
+                    payload: payload.to_owned(),
+                });
+            }
+            Ok(SimAutoservicioRequest::Refund)
+        }
+        "0500" => {
+            if fields.len() != 2 {
+                return Err(Error::Parse {
+                    field: "fields",
+                    value: payload.to_owned(),
+                    payload: payload.to_owned(),
+                });
+            }
+            let voucher = parse_bool_flag(text(&fields, 1), "voucher", payload)?;
+            Ok(SimAutoservicioRequest::Close { voucher })
+        }
+        other => Ok(SimAutoservicioRequest::Unsupported(other.to_owned())),
+    }
+}
+
 fn text<'a>(fields: &[&'a str], index: usize) -> &'a str {
     fields.get(index).map_or("", |value| value.trim())
 }

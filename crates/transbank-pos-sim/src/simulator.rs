@@ -6,7 +6,9 @@ use std::mem;
 use transbank_pos::protocol::{ACK, FrameDecoder, LinkEvent, NAK, decode_latin1, encode_frame};
 use transbank_pos::{CardBrand, CardType, PosDate, PosTime};
 
-use crate::request::{SaleArgs, SimRequest, parse_request};
+use crate::request::{
+    SaleArgs, SimAutoservicioRequest, SimRequest, parse_autoservicio_request, parse_request,
+};
 use crate::scenario::Scenario;
 
 /// Commerce code reported by the simulator (Transbank test commerce).
@@ -34,8 +36,7 @@ pub enum TerminalKind {
     /// POS Integrado.
     #[default]
     Integrado,
-    /// POS Autoservicio. Pending (AUTO-01): answers ACK to `0100` and response
-    /// code 12 ("Transacción No Soportada") to everything else.
+    /// POS Autoservicio (`docs/protocol-spec.md` §7).
     Autoservicio,
 }
 
@@ -214,7 +215,7 @@ impl PosSimulator {
         out.push(ACK);
         let mut responses = match self.kind {
             TerminalKind::Integrado => self.respond(payload),
-            TerminalKind::Autoservicio => unsupported(payload),
+            TerminalKind::Autoservicio => self.respond_autoservicio(payload),
         };
         if responses.is_empty() || self.scenario == Scenario::NoResponse {
             return;
@@ -562,6 +563,179 @@ impl PosSimulator {
             self.time.hour, self.time.minute, self.time.second
         )
     }
+
+    /// Responses of the POS Autoservicio (`docs/simulator-spec.md` §3, `protocol-spec.md` §7).
+    fn respond_autoservicio(&mut self, payload: &str) -> Vec<String> {
+        let Ok(request) = parse_autoservicio_request(payload) else {
+            return vec![format!("{}|61", response_code_for(payload))];
+        };
+        match request {
+            SimAutoservicioRequest::Poll | SimAutoservicioRequest::Initialize => Vec::new(),
+            SimAutoservicioRequest::InitializationResult => {
+                vec![format!("1080|90|{}|{}", self.date_text(), self.time_text())]
+            }
+            SimAutoservicioRequest::LoadKeys => {
+                vec![format!("0810|00|{SIM_COMMERCE_CODE}|{SIM_TERMINAL_ID}")]
+            }
+            SimAutoservicioRequest::Sale(sale) => self.autoservicio_sale(&sale, None),
+            SimAutoservicioRequest::MultiCodeSale {
+                sale,
+                commerce_code,
+            } => self.autoservicio_sale(&sale, Some(commerce_code)),
+            SimAutoservicioRequest::LastSale { voucher } => {
+                vec![self.autoservicio_last_sale(voucher)]
+            }
+            SimAutoservicioRequest::Refund => vec![self.autoservicio_refund()],
+            SimAutoservicioRequest::Close { voucher } => {
+                self.sales.clear();
+                if self.scenario == Scenario::RequireClose {
+                    self.scenario = Scenario::Approve;
+                }
+                let voucher_lines = if voucher {
+                    match self.scenario {
+                        Scenario::WithVoucher(lines) => lines,
+                        _ => DEFAULT_VOUCHER_LINES,
+                    }
+                } else {
+                    0
+                };
+                let voucher_str = if voucher_lines > 0 {
+                    close_voucher(voucher_lines)
+                } else {
+                    String::new()
+                };
+                vec![format!(
+                    "0510|00|{SIM_COMMERCE_CODE}|{SIM_TERMINAL_ID}|{voucher_str}"
+                )]
+            }
+            SimAutoservicioRequest::Unsupported(_) => unsupported(payload),
+        }
+    }
+
+    fn autoservicio_sale(&mut self, args: &SaleArgs, commerce_code: Option<String>) -> Vec<String> {
+        let function_code = if commerce_code.is_some() {
+            "0271"
+        } else {
+            "0210"
+        };
+        let rejection = if args.amount < 50 {
+            Some(10)
+        } else if args.amount > 999_999_999 {
+            Some(68)
+        } else if args.ticket.len() > 6 {
+            Some(70)
+        } else if self.scenario == Scenario::RequireClose {
+            Some(74)
+        } else {
+            None
+        };
+        if let Some(code) = rejection {
+            return vec![rejected(function_code, code, args)];
+        }
+        let mut frames: Vec<String> = if args.status {
+            let codes = match &self.scenario {
+                Scenario::Intermediate(codes) => codes.clone(),
+                _ => DEFAULT_INTERMEDIATE.to_vec(),
+            };
+            codes.iter().map(|code| format!("0900|{code}")).collect()
+        } else {
+            Vec::new()
+        };
+        if let Scenario::RejectNextSale(code) = self.scenario {
+            self.scenario = Scenario::Approve;
+            frames.push(rejected(function_code, code, args));
+            return frames;
+        }
+        let sale = self.register_sale(args, commerce_code);
+        let voucher_lines = match self.scenario {
+            Scenario::WithVoucher(lines) => lines,
+            _ if args.voucher => DEFAULT_VOUCHER_LINES,
+            _ => 0,
+        };
+        let mut fields = self.autoservicio_sale_fields(function_code, &sale, voucher_lines);
+        if let Some(code) = &sale.commerce_code {
+            fields.push(provider(code));
+        }
+        self.sales.push(sale);
+        frames.push(fields.join("|"));
+        frames
+    }
+
+    fn autoservicio_sale_fields(
+        &self,
+        function_code: &str,
+        sale: &SimulatedSale,
+        voucher_lines: u8,
+    ) -> Vec<String> {
+        let (inst_type, inst_num, inst_amt, inst_desc) =
+            if sale.card_type == CardType::Credit && sale.amount >= INSTALLMENTS_FROM {
+                let installment_amount = sale.amount.div_ceil(INSTALLMENTS);
+                (
+                    "03".to_owned(),
+                    "03".to_owned(),
+                    installment_amount.to_string(),
+                    "CUOTAS SIN INTERES".to_owned(),
+                )
+            } else {
+                (String::new(), String::new(), String::new(), String::new())
+            };
+        vec![
+            function_code.to_owned(),
+            "00".to_owned(),
+            SIM_COMMERCE_CODE.to_owned(),
+            SIM_TERMINAL_ID.to_owned(),
+            sale.ticket.clone(),
+            sale.authorization_code.clone(),
+            sale.amount.to_string(),
+            sale.last4.clone(),
+            format!("{:06}", sale.operation_number),
+            sale.card_type.code().to_owned(),
+            self.date_text(),
+            format!("{:0>19}", sale.last4),
+            sale.card_brand.code().to_owned(),
+            self.date_text(),
+            self.time_text(),
+            voucher(sale, voucher_lines),
+            inst_type,
+            inst_num,
+            inst_amt,
+            inst_desc,
+        ]
+    }
+
+    fn autoservicio_last_sale(&self, wants_voucher: bool) -> String {
+        let Some(sale) = self.sales.last() else {
+            return format!("0260|11|{SIM_COMMERCE_CODE}|{SIM_TERMINAL_ID}");
+        };
+        let voucher_lines = if wants_voucher {
+            match self.scenario {
+                Scenario::WithVoucher(lines) => lines,
+                _ => DEFAULT_VOUCHER_LINES,
+            }
+        } else {
+            0
+        };
+        let fields = self.autoservicio_sale_fields("0260", sale, voucher_lines);
+        fields.join("|")
+    }
+
+    fn autoservicio_refund(&mut self) -> String {
+        let Some(sale) = self.sales.last_mut() else {
+            return format!("1210|05|{SIM_COMMERCE_CODE}|{SIM_TERMINAL_ID}|||");
+        };
+        if sale.card_type != CardType::Credit {
+            return format!("1210|08|{SIM_COMMERCE_CODE}|{SIM_TERMINAL_ID}|||");
+        }
+        if sale.refunded {
+            return format!("1210|04|{SIM_COMMERCE_CODE}|{SIM_TERMINAL_ID}|||");
+        }
+        sale.refunded = true;
+        let refund_operation = self.take_operation();
+        format!(
+            "1210|00|{SIM_COMMERCE_CODE}|{SIM_TERMINAL_ID}|{}|{refund_operation:06}|",
+            authorization(refund_operation)
+        )
+    }
 }
 
 fn countdown(n: u8, scenario: fn(u8) -> Scenario) -> Scenario {
@@ -593,6 +767,19 @@ fn voucher(sale: &SimulatedSale, lines: u8) -> String {
                 "SIMULADOR {line:02} TICKET {} ${}",
                 sale.ticket, sale.amount
             );
+            let mut text: String = text.chars().take(VOUCHER_LINE).collect();
+            while text.len() < VOUCHER_LINE {
+                text.push(' ');
+            }
+            text
+        })
+        .collect()
+}
+
+fn close_voucher(lines: u8) -> String {
+    (1..=lines)
+        .map(|line| {
+            let text = format!("SIMULADOR {line:02} CIERRE AUTOSERVICIO");
             let mut text: String = text.chars().take(VOUCHER_LINE).collect();
             while text.len() < VOUCHER_LINE {
                 text.push(' ');

@@ -1,6 +1,6 @@
 # API pública — `transbank-pos` (contrato)
 
-Contrato con los usuarios del crate (API-01). Las firmas son normativas en nombres, parámetros, tipos de retorno y semántica; los detalles internos (campos privados, módulos internos) son libres. Cambiar algo de aquí requiere que la tarea lo diga. Versión objetivo: **0.1.0**.
+Contrato con los usuarios del crate (API-01). Las firmas son normativas en nombres, parámetros, tipos de retorno y semántica; los detalles internos (campos privados, módulos internos) son libres. Cambiar algo de aquí requiere que la tarea lo diga. Versión: **1.0.0** (decisión del dueño 2026-10-22).
 
 Re-exports en la raíz (`transbank_pos::`): todo lo marcado **[raíz]**.
 
@@ -182,7 +182,10 @@ pub struct LoadKeysResponse { pub response_code, pub commerce_code, pub terminal
 pub struct CloseResponse { pub response_code, pub commerce_code, pub terminal_id, pub voucher: Option<String>, pub raw } // 0510
 pub struct TotalsResponse { pub response_code, pub tx_count: Option<u32>, pub tx_total: Option<u64>, pub raw }          // 0710
 pub struct RefundResponse { pub response_code, pub commerce_code, pub terminal_id, pub authorization_code, pub operation_number, pub raw } // 1210
-// Autoservicio (AUTO-01): SelfServiceSaleResponse (layout §7.1), InitializationResponse (1080)
+// Autoservicio (AUTO-01), en message/autoservicio.rs:
+// SelfServiceSaleResponse (layout §7.1; is_approved() solo con código 0),
+// SelfServiceMultiCodeSaleResponse { sale, commerce_provider_code },
+// InitializationResponse { response_code, date, time, raw } (1080; is_approved() solo con código 90)
 ```
 
 Todas tienen `is_approved()`.
@@ -295,6 +298,7 @@ impl PosIntegrado<serial::SerialTransport> {
 
 /// [raíz] (AUTO-01)
 pub struct PosAutoservicio<T: Transport, C: Clock = SystemClock> { … }
+// new, with_config, with_clock, link_mut, into_inner; open(path) con la feature serial (19200);
 // poll, load_keys, initialize, initialization_result, sale, sale_with_status, multicode_sale,
 // last_sale(voucher: bool), refund_last(), close(voucher: bool)
 ```
@@ -303,8 +307,13 @@ pub struct PosAutoservicio<T: Transport, C: Clock = SystemClock> { … }
 
 ## 9. Async (ASYNC-01, feature `tokio`)
 
-Módulo `transbank_pos::tokio` con `AsyncTransport`, `AsyncPosIntegrado` con los mismos métodos `async`, reutilizando `protocol` y `message`. Se especifica en su tarea.
+Módulo `transbank_pos::tokio`, reutilizando `protocol` y `message`:
+
+- `AsyncLink<S: AsyncRead + AsyncWrite + Unpin + Send>`: `new(stream, config)`, `send_command`, `request`, `request_list`, `config`, `stream_mut`, `into_inner`. No hay `AsyncTransport`.
+- `AsyncPosIntegrado<S>`: `new`, `with_config`, los métodos de `PosIntegrado` en `async`, `link_mut`, `into_inner`; `connect_tcp(addr)` (plazo interno de 5 s) y, con `tokio-serial`, `open_serial(path, baud)`.
+
+Soltar el futuro de una venta deja el resultado desconocido: se consulta `last_sale`. Requiere un runtime de Tokio con los drivers de tiempo y E/S.
 
 ## 10. Simulador — `transbank-pos-sim`
 
-Ver `docs/simulator-spec.md`. Superficie pública: `PosSimulator`, `TerminalKind`, `Scenario`, `SimulatedSale`, `SimTransport` (implementa `Transport`), `TcpServer`.
+Ver `docs/simulator-spec.md`. Superficie pública: `PosSimulator`, `TerminalKind`, `Scenario`, `SimulatedSale`, `SimTransport` (implementa `Transport`), `TcpServer`; con la feature `tokio`, `AsyncSimStream` (`AsyncRead + AsyncWrite` directo sobre `PosSimulator`, sin `spawn` ni `tokio::io::duplex`).

@@ -333,3 +333,5 @@ Del SDK Node (`responseCodes.js`). Mensajes en español tal como los entrega Tra
 | OPEN-04 | ¿El POS acepta el ticket en minúsculas? Los ejemplos usan `abc123` | Se envía tal como lo da el usuario |
 | OPEN-05 | ¿Llegan bytes basura al abrir el puerto USB? | El decodificador los descarta (§2.4) |
 | OPEN-06 | Layout del voucher de cierre y de última venta en Integrado | Se expone crudo |
+| OPEN-07 | Relleno de la venta Autoservicio: §7 escribe `{amount}` y `{ticket}` sin formato. El SDK Node (`PosAutoservicio.js`, revisado 2026-11-05) rellena 9 y 6 dígitos | Se envía con relleno, como Integrado (AUTO-01). El simulador acepta el monto con o sin relleno |
+| OPEN-08 | Código de éxito de `1080`: §7 dice `90`; el SDK Node marca `successful` con `0` | `InitializationResponse::is_approved()` solo con `90`: un `00` se informa como no aprobado, el `response_code` queda disponible |

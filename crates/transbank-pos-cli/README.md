@@ -2,7 +2,7 @@
 
 > **Unofficial — not affiliated with, endorsed or supported by Transbank S.A.** "Transbank" is a trademark of its owner and is used only to describe compatibility.
 
-`tbk-pos`: command-line tool (output in Spanish) to operate and diagnose Transbank POS Integrado terminals over a serial port, TCP or the built-in simulator. Built on [`transbank-pos`](https://crates.io/crates/transbank-pos).
+`tbk-pos`: command-line tool (output in Spanish) to operate and diagnose Transbank POS Integrado and POS Autoservicio terminals over a serial port, TCP or the built-in simulator. Built on [`transbank-pos`](https://crates.io/crates/transbank-pos).
 
 ## Installation
 
@@ -22,11 +22,15 @@ tbk-pos --port /dev/ttyACM0 refund 42 --yes
 tbk-pos --port /dev/ttyACM0 detail
 tbk-pos --tcp 127.0.0.1:7777 totals              # serial-to-network bridge or tbk-pos-sim
 tbk-pos --sim --scenario reject:1 sale 1000 T1   # in-memory simulator
+tbk-pos --autoservicio --sim sale 1000 T1 --voucher
+tbk-pos --autoservicio --sim init
+tbk-pos --autoservicio --sim init-result
+tbk-pos --autoservicio --sim refund-last --yes
 ```
 
-Commands: `ports`, `autoconnect`, `poll`, `load-keys`, `sale`, `multicode-sale`, `last-sale`, `refund`, `totals`, `detail [--print]`, `close`, `normal-mode`, `raw <payload>`.
+Commands: `ports`, `autoconnect`, `poll`, `load-keys`, `init`, `init-result`, `sale`, `multicode-sale`, `last-sale`, `refund`, `refund-last`, `totals`, `detail [--print]`, `close`, `normal-mode`, `raw <payload>`.
 
-Options: `--json` (sensitive fields redacted), `--show-voucher`, `--trace-file <file>` (redacted link trace, filter with `RUST_LOG`), `--ack-timeout-ms`, `--response-timeout-s`, `--yes` (skip confirmation of refund/close/normal-mode).
+Options: `--autoservicio`, `--json` (sensitive fields redacted), `--show-voucher`, `--trace-file <file>` (redacted link trace, filter with `RUST_LOG`), `--ack-timeout-ms`, `--response-timeout-s`, `--yes` (skip confirmation of refund/close/normal-mode).
 
 Exit codes: `0` approved/ok · `1` not approved · `2` communication or protocol error · `64` usage error. If a sale times out, the result is unknown: run `last-sale` instead of repeating it.
 

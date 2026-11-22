@@ -4,18 +4,20 @@ SDK **no oficial** en Rust para comunicarse con los terminales **POS de Transban
 
 > ⚠️ **Proyecto no oficial.** No está afiliado, respaldado ni soportado por Transbank S.A. El protocolo se derivó de los [SDKs oficiales de Transbank](https://github.com/TransbankDevelopers) (BSD-3-Clause; ver [`NOTICE`](NOTICE)). Úsalo bajo tu responsabilidad y valida siempre con tu terminal antes de cobrar de verdad.
 
-> Estado: **implementado, sin validar con un POS real.** Protocolo, enlace, cliente `PosIntegrado`, transportes, simulador y CLI listos y probados contra el simulador; falta la validación con hardware (HW-01) y POS Autoservicio. Detalle en [`.ai-context/implementation-status.md`](.ai-context/implementation-status.md) y [`tasks/README.md`](tasks/README.md). Aún no publicado en crates.io.
+> Estado: **1.0.0 publicada en crates.io; cambios aditivos en `develop-AGENTS`, sin validar aún con un POS real.** Protocolo, enlace, clientes `PosIntegrado` y `PosAutoservicio`, API asíncrona opcional (`tokio`), transportes, simulador y CLI listos y probados contra el simulador; falta la validación con hardware (HW-01). Detalle en [`.ai-context/implementation-status.md`](.ai-context/implementation-status.md), [`CHANGELOG.md`](CHANGELOG.md) y [`tasks/README.md`](tasks/README.md).
 
-## Qué ofrece (v0.1)
+## Qué ofrece
 
 - **`transbank-pos`** — librería:
   - Protocolo *sans-IO*: codificador/decodificador de tramas, LRC, requests y parseo tipado de respuestas.
-  - Capa de enlace con ACK/NAK, 3 reintentos y timeouts configurables.
-  - Cliente `PosIntegrado`: `poll`, `load_keys`, `sale`, `multicode_sale`, `last_sale`, `refund`, `totals`, `sales_detail`, `close`, `set_normal_mode`, con mensajes intermedios ("Esperando leer tarjeta", "Ingrese clave"…).
+  - Capa de enlace con ACK/NAK, 3 reintentos y timeouts configurables (nunca reenvía una venta ya acusada con ACK).
+  - Cliente `PosIntegrado`: `poll`, `load_keys`, `sale`, `multicode_sale`, `last_sale`, `refund`, `totals`, `sales_detail`, `close`, `set_normal_mode`, con mensajes intermedios ("Esperando Leer Tarjeta", "Solicitando Ingreso de Clave"…).
+  - Cliente `PosAutoservicio`: `poll`, `load_keys`, `initialize`, `initialization_result`, `sale`, `multicode_sale`, `last_sale`, `refund_last`, `close`.
+  - API asíncrona opcional (features `tokio` y `tokio-serial`): `transbank_pos::tokio::{AsyncLink, AsyncPosIntegrado}`.
   - Transportes: puerto serie (`serialport`, feature `serial`), TCP y memoria (tests).
   - Montos en CLP enteros, tipos sin pánicos, `#![forbid(unsafe_code)]`.
-- **`transbank-pos-sim`** — POS Integrado simulado (aprobaciones, rechazos, timeouts, LRC corrupto…) en memoria o como servidor TCP (`tbk-pos-sim`).
-- **`transbank-pos-cli`** — CLI `tbk-pos` para operar un POS real o el simulador desde la terminal.
+- **`transbank-pos-sim`** — POS Integrado y POS Autoservicio simulados (aprobaciones, rechazos, timeouts, LRC corrupto…) en memoria (`SimTransport`, `AsyncSimStream` con feature `tokio`) o como servidor TCP (`tbk-pos-sim`).
+- **`transbank-pos-cli`** — CLI `tbk-pos` para operar un POS real o el simulador desde la terminal (Integrado y `--autoservicio`).
 
 ## Ejemplo
 
@@ -66,6 +68,7 @@ cargo run -p transbank-pos-cli -- --port /dev/ttyACM0 poll
 ```bash
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy -p transbank-pos --no-default-features -- -D warnings
 cargo test --workspace --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features
 ```
@@ -74,7 +77,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features
 
 ```
 transbank-SDK/
-├── AGENTS.md  CLAUDE.md  README.md  NOTICE  LICENSE-MIT  LICENSE-APACHE
+├── AGENTS.md  CLAUDE.md  README.md  CHANGELOG.md  NOTICE  LICENSE-MIT  LICENSE-APACHE
 ├── .ai-context/          # contexto normativo (dominio, arquitectura, restricciones, API)
 ├── docs/                 # protocolo, simulador, pruebas con hardware, publicación
 ├── tasks/                # plan maestro y tareas

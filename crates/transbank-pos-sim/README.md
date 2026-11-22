@@ -2,19 +2,19 @@
 
 > **Unofficial — not affiliated with, endorsed or supported by Transbank S.A.** "Transbank" is a trademark of its owner and is used only to describe compatibility.
 
-Simulator of a Transbank **POS Integrado** for testing applications built on [`transbank-pos`](https://crates.io/crates/transbank-pos) without hardware:
+Simulator of a Transbank **POS Integrado** and **POS Autoservicio** for testing applications built on [`transbank-pos`](https://crates.io/crates/transbank-pos) without hardware:
 
 - `PosSimulator`: sans-IO fake POS (ACK/NAK, retransmissions, sales, refunds, totals, detail, close) with injectable failures (`Scenario`: declined sale, intermediate messages, dropped ACKs, NAKs, no response, corrupted LRC, garbage, wrong function code, close required, voucher);
 - `SimTransport`: the simulator as a `transbank_pos::Transport` with simulated time — timeouts take no real time;
 - `TcpServer` and the `tbk-pos-sim` binary: the simulator over TCP (loopback only unless `--allow-remote`).
 
-Deterministic: fixed date/time, authorization codes derived from the operation number, no randomness. POS Autoservicio is not simulated yet.
+Deterministic: fixed date/time, authorization codes derived from the operation number, no randomness. Supports both POS Integrado and POS Autoservicio.
 
 ## Installation
 
 ```toml
 [dev-dependencies]
-transbank-pos-sim = "0.1"
+transbank-pos-sim = "1"
 ```
 
 ```bash
@@ -35,6 +35,17 @@ let mut pos = PosIntegrado::with_clock(SimTransport::new(sim, clock.clone()), Li
 
 let sale = pos.sale(&SaleRequest::new(12_000, "ABC123")?)?;
 assert!(!sale.is_approved()); // declined: a response, not an error
+```
+
+### Async in-memory stream
+
+With the `tokio` feature enabled, `transbank-pos-sim` provides `AsyncSimStream`, implementing `tokio::io::AsyncRead + AsyncWrite` directly on `PosSimulator` without background tasks:
+
+```rust
+use transbank_pos_sim::{AsyncSimStream, PosSimulator, TerminalKind};
+
+let sim = PosSimulator::new(TerminalKind::Integrado);
+let stream = AsyncSimStream::new(sim);
 ```
 
 To test software that only speaks serial, bridge a pseudo-terminal to the TCP server on Linux: `socat pty,link=/tmp/ttyV0,raw tcp:127.0.0.1:7777`, then open `/tmp/ttyV0`. On macOS this does not work with `transbank-pos` (`serialport` sets the speed with the `IOSSIOSPEED` ioctl, which pseudo-terminals reject with "Not a typewriter"): connect over TCP instead (`tbk-pos --tcp 127.0.0.1:7777 …`).

@@ -9,7 +9,7 @@
 //! - [`TcpServer`]: the simulator over TCP (also the `tbk-pos-sim` binary).
 //!
 //! The simulator is deterministic: fixed date and time, authorization codes derived
-//! from the operation number, no randomness. POS Autoservicio is pending (AUTO-01).
+//! from the operation number, no randomness. Supports POS Integrado and POS Autoservicio.
 
 #![forbid(unsafe_code)]
 
@@ -19,6 +19,9 @@ mod simulator;
 mod tcp;
 mod transport;
 
+#[cfg(feature = "tokio")]
+mod async_stream;
+
 pub use request::{SaleArgs, SimRequest, parse_request};
 pub use scenario::Scenario;
 pub use simulator::{
@@ -26,3 +29,6 @@ pub use simulator::{
 };
 pub use tcp::TcpServer;
 pub use transport::SimTransport;
+
+#[cfg(feature = "tokio")]
+pub use async_stream::AsyncSimStream;
