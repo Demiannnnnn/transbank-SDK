@@ -89,3 +89,13 @@ INFRA-01 → PROTO-01 → PROTO-02 → LINK-01 → SIM-01 → CLIENT-01 ─┬�
 ## 5. Definición de terminado
 ## Reporte
 ```
+
+
+## Documentación para humanos (estándar del ecosistema, 2026-11-22)
+
+| ID | Tarea | Depende de | Estado |
+|:--|:--|:--|:--|
+| [HDOC-01](hdoc/task-01-estructura-diagramas-readme.md) | Estructura de docs para humanos, diagramas y README robusto | — | ⬜ |
+| [HDOC-02](hdoc/task-02-informe-tecnico.md) | Informe técnico e informe de diagramas | HDOC-01 | ⬜ |
+| [HDOC-03](hdoc/task-03-legal-seguridad.md) | Informe legal e informe de seguridad | HDOC-01 | ⬜ |
+| [HDOC-04](hdoc/task-04-despliegue-pruebas-usuario.md) | Despliegue/integración, pruebas | HDOC-01 | ⬜ |
