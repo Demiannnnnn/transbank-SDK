@@ -1,0 +1,67 @@
+@startuml estados-enlace
+!include ../../plantilla/estilo.puml
+title Estados del enlace — Máquina de estados de Link<T>
+
+[*] --> Desconectado
+
+state Desconectado {
+}
+
+state Inactivo {
+  Inactivo : Canal listo para enviar comandos
+  Inactivo : descartar_entrada_pendiente()
+}
+
+state EnviandoComando {
+  EnviandoComando : write_all(STX + payload + ETX + LRC)
+  EnviandoComando : attempts++
+}
+
+state EsperandoAck {
+  EsperandoAck : read_timeout(ack_timeout = 2 s)
+}
+
+state EsperandoRespuesta {
+  EsperandoRespuesta : read_timeout(response_timeout = 150 s)
+  EsperandoRespuesta : Recibe 0900 -> envía ACK y notifica
+  EsperandoRespuesta : Descarta bytes basura fuera de trama
+}
+
+state VerificandoLrc {
+  VerificandoLrc : XOR(payload..ETX) == byte_lrc
+}
+
+state RecibiendoDetalle {
+  RecibiendoDetalle : Acumula tramas 0261 / 0291
+  RecibiendoDetalle : Termina con timeout tail (500 ms)
+}
+
+state ErrorTerminal <<planificado>> {
+}
+
+Desconectado --> Inactivo : open() / connect()
+
+Inactivo --> EnviandoComando : send_command() / request()
+EnviandoComando --> EsperandoAck : Trama escrita
+
+EsperandoAck --> EnviandoComando : NAK o timeout\n(attempts < 3)
+EsperandoAck --> ErrorTerminal : Error::NoAck\n(attempts >= 3)
+
+EsperandoAck --> Inactivo : ACK recibido\n(en send_command)
+EsperandoAck --> EsperandoRespuesta : ACK recibido\n(en request)
+
+EsperandoRespuesta --> EsperandoRespuesta : Trama 0900 recibida\n[envía ACK, callback]
+EsperandoRespuesta --> ErrorTerminal : Error::ResponseTimeout\n[plazo 150 s vencido]
+EsperandoRespuesta --> VerificandoLrc : Trama final recibida
+
+VerificandoLrc --> EsperandoRespuesta : LRC inválido\n[envía NAK, bad_lrc < 3]
+VerificandoLrc --> ErrorTerminal : Error::BadLrc\n[bad_lrc >= 3]
+VerificandoLrc --> Inactivo : LRC válido\n[envía ACK, retorna Ok(payload)]
+VerificandoLrc --> RecibiendoDetalle : Comando request_list()\n[envía ACK, espera siguiente]
+
+RecibiendoDetalle --> RecibiendoDetalle : Trama de lista + ACK
+RecibiendoDetalle --> Inactivo : Timeout tail (fin de lista)\nRetorna Vec<payloads>
+
+ErrorTerminal --> Inactivo : Operación finalizada con Err
+Inactivo --> Desconectado : Drop transport / close()
+@enduml

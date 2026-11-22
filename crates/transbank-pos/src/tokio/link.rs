@@ -1,5 +1,5 @@
 //! Asynchronous link layer: sends frames, waits for ACK/NAK and responses with
-//! timeouts and retries (`docs/protocol-spec.md` §3, §4.2, §8).
+//! timeouts and retries (`docs/md/protocol-spec.md` §3, §4.2, §8).
 //!
 //! # Cancellation safety
 //!
@@ -161,7 +161,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
     }
 
     /// Sends a command, waits for its ACK and collects the frames `expected` until
-    /// the end of the list (`docs/protocol-spec.md` §4.2).
+    /// the end of the list (`docs/md/protocol-spec.md` §4.2).
     ///
     /// Returns the payloads of the entries with an authorization code; the
     /// terminators (empty authorization) are consumed and dropped. Each frame must
@@ -182,7 +182,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncLink<S> {
         let mut frames = 0usize;
         let waited = self.config.response_timeout;
         // Each list frame gets a fresh `response_timeout`; a `0900` does not extend it
-        // (docs/protocol-spec.md §3.2 step 4).
+        // (docs/md/protocol-spec.md §3.2 step 4).
         let mut deadline = Self::deadline(waited);
         loop {
             let response = match self.receive(expected, deadline, waited).await? {

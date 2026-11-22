@@ -1,4 +1,4 @@
-//! Failure injection scenarios (`docs/simulator-spec.md` §2).
+//! Failure injection scenarios (`docs/md/simulator-spec.md` §2).
 
 use std::str::FromStr;
 

@@ -15,7 +15,7 @@ Additive changes, compatible with 1.0.0. Tested against the bundled simulator on
 
 ### Changed
 
-- `transbank-pos-sim`: `TerminalKind::Autoservicio` now simulates the terminal (`docs/protocol-spec.md` §7) instead of answering code 12 to everything but `0100`. Commands outside §7 still answer code 12.
+- `transbank-pos-sim`: `TerminalKind::Autoservicio` now simulates the terminal (`docs/md/protocol-spec.md` §7) instead of answering code 12 to everything but `0100`. Commands outside §7 still answer code 12.
 - `transbank-pos-cli`: `--baud` has no fixed default; it depends on the terminal (115200 is unchanged for POS Integrado).
 
 ### Fixed
@@ -27,7 +27,7 @@ Additive changes, compatible with 1.0.0. Tested against the bundled simulator on
 
 ## [1.0.0] - 2026-10-22
 
-First release. Tested against the bundled simulator only: **never tested against a real Transbank terminal** (see the open questions in `docs/protocol-spec.md` §10).
+First release. Tested against the bundled simulator only: **never tested against a real Transbank terminal** (see the open questions in `docs/md/protocol-spec.md` §10).
 
 ### Added
 

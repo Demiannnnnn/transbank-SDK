@@ -1,4 +1,4 @@
-//! POS Integrado responses and their parsers (`docs/protocol-spec.md` §5, §6).
+//! POS Integrado responses and their parsers (`docs/md/protocol-spec.md` §5, §6).
 //!
 //! Every parser checks the function code ([`Error::UnexpectedResponse`] otherwise),
 //! keeps the raw payload in `raw` and never invents values for absent fields
@@ -513,7 +513,7 @@ pub fn parse_multicode_detail_entry(payload: &str) -> Result<MultiCodeDetailEntr
 }
 
 /// `true` if a detail entry marks the end of the list (empty authorization code,
-/// `docs/protocol-spec.md` §4.2).
+/// `docs/md/protocol-spec.md` §4.2).
 #[must_use]
 pub fn is_detail_terminator(entry: &DetailEntry) -> bool {
     entry.authorization_code.is_none()

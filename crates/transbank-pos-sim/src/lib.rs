@@ -2,7 +2,7 @@
 //!
 //! **Unofficial — not affiliated with Transbank S.A.** Simulator of a Transbank POS
 //! terminal for testing applications built on `transbank-pos` without hardware
-//! (`docs/simulator-spec.md` in the repository):
+//! (`docs/md/simulator-spec.md` in the repository):
 //!
 //! - [`PosSimulator`]: sans-IO fake POS with injectable failures ([`Scenario`]).
 //! - [`SimTransport`]: the simulator as a `transbank_pos::Transport` with simulated time.

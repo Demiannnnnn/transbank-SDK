@@ -1,4 +1,4 @@
-//! Sans-IO POS simulator (`docs/simulator-spec.md` §1, §3).
+//! Sans-IO POS simulator (`docs/md/simulator-spec.md` §1, §3).
 
 use std::collections::VecDeque;
 use std::mem;
@@ -36,7 +36,7 @@ pub enum TerminalKind {
     /// POS Integrado.
     #[default]
     Integrado,
-    /// POS Autoservicio (`docs/protocol-spec.md` §7).
+    /// POS Autoservicio (`docs/md/protocol-spec.md` §7).
     Autoservicio,
 }
 
@@ -284,7 +284,7 @@ impl PosSimulator {
         out.extend_from_slice(frame);
     }
 
-    /// Responses of the POS Integrado (`docs/simulator-spec.md` §3).
+    /// Responses of the POS Integrado (`docs/md/simulator-spec.md` §3).
     fn respond(&mut self, payload: &str) -> Vec<String> {
         let Ok(request) = parse_request(payload) else {
             return vec![format!("{}|61", response_code_for(payload))];
@@ -523,7 +523,7 @@ impl PosSimulator {
         frames
     }
 
-    /// `0261` layout (`docs/protocol-spec.md` §5.3).
+    /// `0261` layout (`docs/md/protocol-spec.md` §5.3).
     fn detail_fields(&self, sale: &SimulatedSale) -> Vec<String> {
         let fields = self.sale_fields("0261", sale);
         let at = |index: usize| fields.get(index).cloned().unwrap_or_default();
@@ -564,7 +564,7 @@ impl PosSimulator {
         )
     }
 
-    /// Responses of the POS Autoservicio (`docs/simulator-spec.md` §3, `protocol-spec.md` §7).
+    /// Responses of the POS Autoservicio (`docs/md/simulator-spec.md` §3, `protocol-spec.md` §7).
     fn respond_autoservicio(&mut self, payload: &str) -> Vec<String> {
         let Ok(request) = parse_autoservicio_request(payload) else {
             return vec![format!("{}|61", response_code_for(payload))];

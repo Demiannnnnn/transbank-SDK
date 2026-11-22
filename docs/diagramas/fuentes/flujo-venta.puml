@@ -1,0 +1,91 @@
+@startuml flujo-venta
+!include ../../plantilla/estilo.puml
+title Flujo de proceso — Transacción de Venta (Activity Diagram)
+
+start
+
+:Software de caja invoca\nPosIntegrado::sale(&req);
+
+:Validar Amount (50..=999.999.999 CLP)\ny Ticket (1..6 caracteres ASCII);
+if (¿Argumentos válidos?) then (no)
+  :Retornar Err(Error::InvalidArgument);
+  stop
+else (sí)
+endif
+
+:Construir payload "0200|amount|ticket|||voucher";
+:Calcular LRC = XOR(primer_byte..ETX);
+:Codificar trama STX + payload + ETX + LRC;
+
+:intentos = 0;
+while (intentos < max_attempts [3])
+  :Enviar trama por Transport::write_all;
+  :Esperar ACK / NAK (ack_timeout = 2 s);
+  if (¿Llegó ACK 0x06?) then (sí)
+    break
+  else (NAK o timeout)
+    :intentos++;
+  endif
+endwhile
+
+if (¿ACK recibido?) then (no)
+  :Retornar Err(Error::NoAck { attempts, naks });
+  stop
+else (sí)
+endif
+
+note right
+  ¡Punto de no retorno!
+  La venta NO se reenvía
+  después de este punto.
+end note
+
+:Iniciar espera de respuesta\n(response_timeout = 150 s);
+
+repeat
+  :Leer bytes del transporte;
+  if (¿Venció plazo de 150 s?) then (sí)
+    :Retornar Err(Error::ResponseTimeout);
+    note right
+      Resultado DESCONOCIDO:
+      El host debe consultar
+      PosIntegrado::last_sale()
+    end note
+    stop
+  else (hay bytes)
+  endif
+
+  if (¿Trama 0900 de estado intermedio?) then (sí)
+    :Enviar ACK 0x06 al POS;
+    :Invocar callback con IntermediateStatus;
+  else if (¿Trama 0210 esperada?) then (sí)
+    break
+  else (basura / otro)
+    :Descartar bytes fuera de trama;
+  endif
+repeat while (true)
+
+:Calcular y verificar LRC de la trama recibida;
+if (¿LRC válido?) then (no)
+  :Enviar NAK 0x15 al POS;
+  :bad_lrc++;
+  if (bad_lrc >= max_bad_lrc [3]) then (sí)
+    :Retornar Err(Error::BadLrc);
+    stop
+  else (no)
+  endif
+else (sí)
+  :Enviar ACK 0x06 al POS;
+endif
+
+:Parsear payload en SaleResponse;
+
+if (response_code == 0 [Approved]) then (sí)
+  :is_approved() = true\nVenta autorizada por Transbank;
+else (no)
+  :is_approved() = false\nRechazo financiero normal (tarjeta sin fondos, clave errónea, etc.);
+endif
+
+:Retornar Ok(SaleResponse);
+stop
+@enduml

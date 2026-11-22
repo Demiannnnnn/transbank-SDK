@@ -12,14 +12,14 @@ Documento para que el dueño decida la próxima publicación. **No se creó ning
 **Recomendación: 1.1.0 para los tres crates** (versión del workspace y dependencias internas `version = "1.1.0"`).
 
 - Lo nuevo es aditivo: tipos, métodos y features nuevos sin quitar ni cambiar firmas de la 1.0.0 → *minor* según SemVer (para la regla `1.x`, agregar API pública es minor).
-- `transbank-pos-sim` y `transbank-pos-cli` usan APIs nuevas de `transbank-pos`: no pueden publicarse contra la 1.0.0. Hay que publicar los tres con la misma versión, en orden `transbank-pos` → `transbank-pos-sim` → `transbank-pos-cli` (`docs/release.md` §2).
+- `transbank-pos-sim` y `transbank-pos-cli` usan APIs nuevas de `transbank-pos`: no pueden publicarse contra la 1.0.0. Hay que publicar los tres con la misma versión, en orden `transbank-pos` → `transbank-pos-sim` → `transbank-pos-cli` (`docs/md/release.md` §2).
 - Los arreglos de §3 cambian comportamiento observable solo ante fallas de línea (ruido, LRC malos, `0900` repetidos) y lo alinean con `protocol-spec.md`: caben en una minor (y también en un patch si se publicaran solos).
 - Propuesta pendiente del dueño (PR #1, borrador, `dev/fix-sale-approved-proposal`): `is_approved()` estricto con el código 90 en POS Integrado. Si se acepta, entra en la 1.1.0 con su nota de compatibilidad en el CHANGELOG; si no, la 1.1.0 sale igual y el tema queda documentado como limitación.
 - No se recomienda 2.0.0: no hay cambios incompatibles de API.
 
 ## 3. Auditoría del protocolo (framing, LRC, timeouts, reintentos, parsing)
 
-Revisor: agy con `gemini-4-argon-high` (segunda opinión), contra `docs/protocol-spec.md`. Cada hallazgo se verificó leyendo el código; los corregidos tienen primero un test que fallaba con el código original. Commits en `dev/audit-protocol`.
+Revisor: agy con `gemini-4-argon-high` (segunda opinión), contra `docs/md/protocol-spec.md`. Cada hallazgo se verificó leyendo el código; los corregidos tienen primero un test que fallaba con el código original. Commits en `dev/audit-protocol`.
 
 | ID | Severidad | Tema | Estado |
 |:--|:--|:--|:--|
@@ -36,7 +36,7 @@ Parsing de respuestas, LRC, codificación ISO-8859-1, overflow numérico y trans
 
 ## 4. Checklist antes de publicar
 
-### HW-01 (lo hace el dueño, `docs/hardware-testing.md`)
+### HW-01 (lo hace el dueño, `docs/md/hardware-testing.md`)
 
 - [ ] `cargo build -p transbank-pos-cli --release` y conectar el POS en modo integrado.
 - [ ] `tbk-pos poll`, `load-keys`, venta aprobada y rechazada, `last-sale`, `refund`, `totals`, `sales-detail` (impreso y enviado), `close`.

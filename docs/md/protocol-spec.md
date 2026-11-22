@@ -10,7 +10,7 @@ Fuente: ingeniería inversa **de los SDKs oficiales** de Transbank (licencia BSD
 | .NET | `TransbankDevelopers/transbank-pos-sdk-dotnet` (`TransbankPosSDK/Services/PosService.cs`, `Responses/**`, `Utils/VoucherParser.cs`, tests) | Índices de campos de cada respuesta, NAK ante LRC inválido, fin del listado de detalle, voucher de 40 columnas, ejemplos de tramas |
 | C | `TransbankDevelopers/transbank-pos-sdk-c` (`src/hex_codes.h`, `transbank_serial_utils.c`, `transbank.c`) | Bytes de control, cálculo del LRC, 3 reintentos, baudios soportados |
 
-No existe en este repo documentación oficial del protocolo. Los puntos donde los SDKs no coinciden están en §10 (**preguntas abiertas**) y se cierran solo con un POS real (`docs/hardware-testing.md`).
+No existe en este repo documentación oficial del protocolo. Los puntos donde los SDKs no coinciden están en §10 (**preguntas abiertas**) y se cierran solo con un POS real (`docs/md/hardware-testing.md`).
 
 ---
 

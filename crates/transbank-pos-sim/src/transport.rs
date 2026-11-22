@@ -1,4 +1,4 @@
-//! [`SimTransport`]: the simulator behind the `Transport` trait (`docs/simulator-spec.md` §4).
+//! [`SimTransport`]: the simulator behind the `Transport` trait (`docs/md/simulator-spec.md` §4).
 
 use std::collections::VecDeque;
 use std::time::Duration;

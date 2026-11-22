@@ -1,4 +1,4 @@
-//! [`AsyncPosIntegrado`]: asynchronous typed client of the POS Integrado (`docs/protocol-spec.md` §4).
+//! [`AsyncPosIntegrado`]: asynchronous typed client of the POS Integrado (`docs/md/protocol-spec.md` §4).
 
 use std::time::Duration;
 

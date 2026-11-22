@@ -1,4 +1,4 @@
-//! POS Autoservicio requests, responses and parsers (`docs/protocol-spec.md` §7).
+//! POS Autoservicio requests, responses and parsers (`docs/md/protocol-spec.md` §7).
 
 use std::fmt;
 
@@ -73,7 +73,7 @@ pub fn self_service_close_payload(voucher: bool) -> String {
     format!("{FC_CLOSE}|{}", flag(voucher))
 }
 
-/// Sale response (`0210` or `0260`) of the POS Autoservicio (`docs/protocol-spec.md` §7.1).
+/// Sale response (`0210` or `0260`) of the POS Autoservicio (`docs/md/protocol-spec.md` §7.1).
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]

@@ -6,7 +6,7 @@ Reglas duras. Violar una es un **defecto bloqueante**, aunque los tests pasen. L
 
 | ID | Regla |
 |:--|:--|
-| **PROTO-01** | **Bytes exactos de `docs/protocol-spec.md`.** Cada request y los vectores de §2.3 tienen un test que compara la trama completa byte a byte. |
+| **PROTO-01** | **Bytes exactos de `docs/md/protocol-spec.md`.** Cada request y los vectores de §2.3 tienen un test que compara la trama completa byte a byte. |
 | **PROTO-02** | **LRC = XOR desde el primer byte del payload hasta ETX inclusive.** Una sola implementación (`protocol::lrc`), usada por el codificador, el decodificador y el simulador. |
 | **PROTO-03** | **El decodificador no interpreta el byte de LRC** (puede ser `0x02`, `0x03`, `0x06`, `0x15`). Tests con los vectores `0100` (LRC `0x02`) y `0500\|\|` (LRC `0x06`). |
 | **PROTO-04** | **Nunca entra en pánico** con ningún input: `proptest` con bytes arbitrarios y trozos arbitrarios. Payload máximo 4096 bytes (`Overflow`). |

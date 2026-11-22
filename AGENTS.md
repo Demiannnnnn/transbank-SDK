@@ -17,7 +17,7 @@
 2. `.ai-context/README.md` y **todos** los archivos que indica (domain, architecture, constraints, conventions, security-model, public-api, implementation-status).
 3. `tasks/README.md` y el archivo de **tu** tarea.
    - Si retomas el proyecto en una sesión o equipo nuevo, lee primero [`.ai-context/handoff.md`](.ai-context/handoff.md).
-4. Los `docs/` que tu tarea referencia. **Siempre** [`docs/protocol-spec.md`](docs/protocol-spec.md) si tocas tramas, mensajes, el enlace o el simulador.
+4. Los `docs/` que tu tarea referencia. **Siempre** [`docs/md/protocol-spec.md`](docs/md/protocol-spec.md) si tocas tramas, mensajes, el enlace o el simulador.
 
 Si algo es ambiguo, contradictorio o falta para tu tarea: **no inventes requisitos ni bytes del protocolo**. Toma la opción más conservadora que cumpla `.ai-context/`, y repórtala en "Decisiones".
 
@@ -67,16 +67,17 @@ SDK **no oficial** en Rust para comunicarse con los terminales POS de Transbank 
 - NUNCA modifiques `[workspace.lints]`, `clippy.toml`, `rustfmt.toml` ni el CI para silenciar errores.
 - NUNCA declares que algo funciona sin haber ejecutado los comandos de §8.
 - NUNCA uses `std::thread::sleep` en tests para "esperar" algo: usa los transportes de prueba con tiempo simulado (`.ai-context/conventions.md` §5).
+- Toda tarea que cambie comportamiento, API, modelo de datos o despliegue DEBE actualizar los diagramas `.puml` y los informes afectados en `docs/` y correr `docs/build-docs.sh` (ver `.ai-context/docs-standard.md` §6).
 
 ## 7. PROHIBIDO — dependencias, sistema, seguridad y licencias
 
 - NUNCA agregues una dependencia fuera de la lista permitida (`.ai-context/architecture.md` §3), ni actives features no listadas. Si crees que hace falta: no la instales, propónla en el reporte.
 - NUNCA instales nada globalmente ni uses `sudo`, `rustup`, `cargo install`, `brew`, `apt`. NUNCA cambies la versión de Rust.
 - NUNCA ejecutes comandos destructivos: `rm -rf` fuera de `target/`; `git clean -fdx`; nada fuera del repo.
-- NUNCA abras puertos serie reales ni hables con un POS real en tests ni en tareas: solo `MemoryTransport`, el simulador o `TcpTransport` contra `127.0.0.1`. El hardware real lo prueba el dueño (`docs/hardware-testing.md`).
+- NUNCA abras puertos serie reales ni hables con un POS real en tests ni en tareas: solo `MemoryTransport`, el simulador o `TcpTransport` contra `127.0.0.1`. El hardware real lo prueba el dueño (`docs/md/hardware-testing.md`).
 - NUNCA hagas peticiones de red a servicios externos en tests.
 - NUNCA escribas en el repo datos reales de tarjetas, números de comercio reales del dueño ni vouchers reales. Usa los códigos de comercio de prueba de los SDKs oficiales (`597029414300`, `597012345678`) o valores inventados evidentes.
-- **Licencias (LEG-01…04):** NUNCA copies código de los SDKs oficiales de Transbank ni de otros proyectos. Se implementa desde `docs/protocol-spec.md`. Si portas datos concretos (tablas de mensajes, tramas de ejemplo), cítalo en un comentario con el archivo de origen. NUNCA copies código con licencia incompatible (GPL, sin licencia).
+- **Licencias (LEG-01…04):** NUNCA copies código de los SDKs oficiales de Transbank ni de otros proyectos. Se implementa desde `docs/md/protocol-spec.md`. Si portas datos concretos (tablas de mensajes, tramas de ejemplo), cítalo en un comentario con el archivo de origen. NUNCA copies código con licencia incompatible (GPL, sin licencia).
 
 ## 8. Definición de "terminado"
 
@@ -88,6 +89,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo clippy -p transbank-pos --no-default-features -- -D warnings
 cargo test --workspace --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features
+docs/build-docs.sh --check
 ```
 
 Más todos los criterios de aceptación y tests de la tarea, y `git status` limpio (todo commiteado en tu rama `dev/*`). Si algo falla y no puedes arreglarlo **sin violar este archivo**, NO la marques como `done`.

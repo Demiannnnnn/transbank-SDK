@@ -1,4 +1,4 @@
-//! [`PosAutoservicio`]: typed client of the POS Autoservicio (`docs/protocol-spec.md` §7).
+//! [`PosAutoservicio`]: typed client of the POS Autoservicio (`docs/md/protocol-spec.md` §7).
 
 use crate::codes::IntermediateStatus;
 use crate::error::Result;

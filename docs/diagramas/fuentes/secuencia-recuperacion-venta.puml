@@ -1,0 +1,68 @@
+@startuml secuencia-recuperacion-venta
+!include ../../plantilla/estilo.puml
+title Secuencia — Manejo de timeout y recuperación ("Nunca Doble Cobro")
+
+actor "Cajero / Host" as host
+participant "PosIntegrado" as client
+participant "Link" as link
+participant "Transport" as tr
+participant "Terminal POS" as pos
+
+host -> client : sale(&SaleRequest(15000, "BOL101"))
+activate client
+client -> link : request("0200|15000|BOL101|||1", "0210")
+activate link
+
+link -> tr : write_all(STX + "0200|..." + ETX + LRC)
+tr -> pos : Envío de trama
+pos --> tr : 0x06 (ACK)
+tr --> link : ACK recibido
+
+note over link, pos #F2DEDE
+  ALERTA CRÍTICA:
+  El POS acusó recibo (ACK). La transacción
+  está en vuelo dentro del POS / Transbank.
+end note
+
+... Espera de respuesta (hasta response_timeout = 150 s) ...
+
+note over link : Transcurren 150 segundos sin respuesta\n(o corte de cable serie / reinicio de POS)
+link --> client : Err(Error::ResponseTimeout { waited: 150s })
+deactivate link
+client --> host : Err(Error::ResponseTimeout)
+deactivate client
+
+note over host #FCF8E3
+  REGLA DE NEGOCIO OBLIGATORIA (ADR-04, LINK-03):
+  El SDK NUNCA reintenta una venta tras recibir ACK.
+  El resultado es DESCONOCIDO.
+  El software de caja NO debe cobrar de nuevo.
+end note
+
+host -> client : last_sale()
+activate client
+client -> link : request("0250|", "0260")
+activate link
+link -> tr : write_all(STX + "0250|" + ETX + LRC)
+pos --> tr : 0x06 (ACK)
+pos -> tr : STX + "0260|00|597029414300|SIM01|BOL101|987654|15000|..." + ETX + LRC
+link -> tr : 0x06 (ACK)
+link --> client : payload "0260|00|..."
+client -> client : parse_sale_response(payload)
+client --> host : Ok(SaleResponse { ticket: "BOL101", amount: 15000, response_code: Approved })
+deactivate link
+deactivate client
+
+alt Ticket y Monto coinciden con la venta dudosa
+  note over host #DFF0D8
+    RECONCILIACIÓN EXITOSA:
+    La venta sí se completó en el POS.
+    Se aprueba la compra y se evita el cobro duplicado.
+  end note
+else Ticket distinto o Código de rechazo
+  note over host #F2DEDE
+    La venta original no se concretó.
+    Se informa al cajero y se puede reintentar con nuevo ticket.
+  end note
+end
+@enduml

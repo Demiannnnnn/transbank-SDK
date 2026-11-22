@@ -1,0 +1,184 @@
+@startuml clases-dominio
+!include ../../plantilla/estilo.puml
+title Clases y tipos del dominio — transbank-pos
+
+package "Tipos de Dominio (protocol::types)" {
+  class Amount {
+    - u32 clp
+    + {static} MIN_SALE: u32 = 50
+    + {static} MAX: u32 = 999_999_999
+    + new(clp: u32): Result<Amount>
+    + get(): u32
+  }
+
+  class Ticket {
+    - String val
+    + new(s: &str): Result<Ticket>
+    + as_str(): &str
+    + padded(): String
+  }
+
+  class OperationNumber {
+    - u32 num
+    + new(u32): Result<OperationNumber>
+    + get(): u32
+  }
+
+  class CommerceCode {
+    - String code
+    + new(&str): Result<CommerceCode>
+    + principal(): CommerceCode
+    + as_str(): &str
+  }
+
+  class PosDate {
+    + day: u8
+    + month: u8
+    + year: u16
+    + parse(s: &str): Option<PosDate>
+  }
+
+  class PosTime {
+    + hour: u8
+    + minute: u8
+    + second: u8
+    + parse(s: &str): Option<PosTime>
+  }
+
+  enum CardType {
+    Credit
+    Debit
+    Prepaid
+    Other(String)
+  }
+
+  enum CardBrand {
+    Visa
+    Mastercard
+    Amex
+    Redcompra
+    Diners
+    Magna
+    Other(String)
+  }
+}
+
+package "Códigos (codes)" {
+  enum ResponseCode {
+    Approved
+    Rejected
+    HostNotResponding
+    InitializationOk
+    Other(u16)
+    + code(): u16
+    + message(): &'static str
+    + is_approved(): bool
+    + requires_close(): bool
+    + requires_load_keys(): bool
+  }
+
+  enum IntermediateStatus {
+    Code(ResponseCode)
+    Unknown(String)
+    + message(): &str
+  }
+}
+
+package "Requests (message)" {
+  class SaleRequest {
+    - amount: Amount
+    - ticket: Ticket
+    - voucher: bool
+    + new(clp: u32, ticket: &str): Result<SaleRequest>
+    + with_voucher(bool): SaleRequest
+    + amount(): Amount
+    + ticket(): &Ticket
+    + voucher(): bool
+  }
+
+  class MultiCodeSaleRequest {
+    - sale: SaleRequest
+    - commerce_code: CommerceCode
+    + new(clp: u32, ticket: &str, commerce: &str): Result<MultiCodeSaleRequest>
+    + with_voucher(bool): MultiCodeSaleRequest
+  }
+}
+
+package "Respuestas (message::responses)" {
+  class SaleResponse {
+    + function_code: String
+    + response_code: ResponseCode
+    + commerce_code: Option<String>
+    + terminal_id: Option<String>
+    + ticket: Option<String>
+    + authorization_code: Option<String>
+    + amount: Option<u32>
+    + last4_digits: Option<String>
+    + operation_number: Option<String>
+    + card_type: Option<CardType>
+    + card_brand: Option<CardBrand>
+    + voucher: Option<String>
+    + raw: String
+    + is_approved(): bool
+    + voucher_lines(): Option<Vec<&str>>
+  }
+
+  class LoadKeysResponse {
+    + response_code: ResponseCode
+    + commerce_code: Option<String>
+    + terminal_id: Option<String>
+    + raw: String
+    + is_approved(): bool
+  }
+
+  class CloseResponse {
+    + response_code: ResponseCode
+    + commerce_code: Option<String>
+    + terminal_id: Option<String>
+    + voucher: Option<String>
+    + raw: String
+    + is_approved(): bool
+  }
+
+  class TotalsResponse {
+    + response_code: ResponseCode
+    + tx_count: Option<u32>
+    + tx_total: Option<u64>
+    + raw: String
+    + is_approved(): bool
+  }
+
+  class RefundResponse {
+    + response_code: ResponseCode
+    + authorization_code: Option<String>
+    + operation_number: Option<String>
+    + raw: String
+    + is_approved(): bool
+  }
+}
+
+package "Errores (error)" {
+  enum Error {
+    Io(io::Error)
+    Transport(Box<dyn std::error::Error>)
+    NoAck { attempts: u8, naks: u8 }
+    ResponseTimeout { waited: Duration }
+    BadLrc { count: u8 }
+    UnexpectedResponse { expected, received, payload }
+    Parse { field, value, payload }
+    InvalidArgument { field, reason }
+    Overflow { max: usize }
+    TooManyFrames { max: usize }
+  }
+}
+
+SaleRequest *-- Amount
+SaleRequest *-- Ticket
+MultiCodeSaleRequest *-- SaleRequest
+MultiCodeSaleRequest *-- CommerceCode
+SaleResponse *-- ResponseCode
+SaleResponse o-- CardType
+SaleResponse o-- CardBrand
+SaleResponse o-- PosDate
+SaleResponse o-- PosTime
+@enduml

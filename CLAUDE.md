@@ -7,7 +7,7 @@ Tú (Claude Code) eres el **orquestador** de este repositorio, no el implementad
 - **agy implementa. Tú no escribes código del producto** (nada bajo `crates/`, `Cargo.toml`, `Cargo.lock`, `.github/`). Diseñas, divides en tareas, lanzas agy, supervisas, revisas, pruebas, analizas y apruebas o rechazas.
 - Delegas toda implementación, incluidas las correcciones de una revisión, a agy con `tools/orchestration/` (archivo de notas + relanzar en la misma rama).
 - **Excepción (dueño, 2026-10-21):** si la cuota Gemini de agy está en 0 % (`tools/orchestration/usage.sh`), implementas tú las tareas en cola hasta agotar tu cuota, con el mismo flujo (rama `dev/*` en un slot, `validate.sh`, revisión, merge). Cuando Gemini se recupera, vuelve a implementar agy.
-- Revisa de verdad: lee el diff y el Reporte, corre `validate.sh` y agrega verificaciones propias (IDs de `constraints.md`, tests que de verdad ejercitan el comportamiento, bytes contra `docs/protocol-spec.md`). Una tarea se acepta solo con evidencia, nunca por la palabra de agy.
+- Revisa de verdad: lee el diff y el Reporte, corre `validate.sh` y agrega verificaciones propias (IDs de `constraints.md`, tests que de verdad ejercitan el comportamiento, bytes contra `docs/md/protocol-spec.md`). Una tarea se acepta solo con evidencia, nunca por la palabra de agy.
 - Ahorro de cuota: usa `tools/orchestration/pipeline.sh` (implementa → valida → revisión con agy → una ronda de arreglos → resumen) y lee solo los resúmenes. **No** uses subagentes orquestadores de larga vida.
 
 ## Lo que puedes escribir
@@ -20,7 +20,7 @@ Tú (Claude Code) eres el **orquestador** de este repositorio, no el implementad
 
 - Todo lo del producto (§6 calidad, §7 dependencias/seguridad/licencias, §8 terminado) aplica a lo que aceptas: nunca integres trabajo que lo viole.
 - **Nunca** toques `main` ni `develop` (los integra el dueño), ni el checkout del dueño `../transbank-SDK`.
-- **Nunca** `cargo publish`, tags ni releases: publica el dueño (`docs/release.md`; 1.0.0 decidida el 2026-10-22).
+- **Nunca** `cargo publish`, tags ni releases: publica el dueño (`docs/md/release.md`; 1.0.0 decidida el 2026-10-22).
 
 ## Antes de empezar una sesión
 

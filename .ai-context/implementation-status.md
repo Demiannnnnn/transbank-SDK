@@ -14,10 +14,10 @@ Qué es real hoy versus planificado. **Lo mantiene el orquestador** a partir de 
 | Simulador + `tbk-pos-sim` | ✅ | SIM-01, AUTO-01 | Integrado y Autoservicio; lo que está fuera de §7 responde 12 |
 | Cliente `PosIntegrado` | ✅ | CLIENT-01 | Todos los métodos salvo `open`/`autoconnect`; tests end-to-end contra el simulador |
 | Serie, TCP, autoconnect | ✅ | SERIAL-01 | TCP probado end-to-end; serie solo compila y lógica pura (hardware en HW-01) |
-| CLI `tbk-pos` | ✅ | CLI-01 | Todos los comandos de `docs/hardware-testing.md`; `--sim` con venta de demostración |
+| CLI `tbk-pos` | ✅ | CLI-01 | Todos los comandos de `docs/md/hardware-testing.md`; `--sim` con venta de demostración |
 | Rustdoc, READMEs, CHANGELOG, empaquetado | ✅ | DOCS-01 | `publish --dry-run` de la lib OK (7 avisos por tests excluidos del paquete); licencias copiadas + test |
 | Endurecimiento de tests | ✅ | TEST-01 | 271 tests (propiedades, `serde`, casos borde del enlace, modelo vs simulador, CLI). `cargo-mutants`: 654 mutantes, 0 escapes (561 detectados, 3 por timeout, 90 no compilan) |
-| Validación con POS real | ⬜ | HW-01 (dueño) | Preguntas OPEN-01…06 de `docs/protocol-spec.md` §10 |
+| Validación con POS real | ⬜ | HW-01 (dueño) | Preguntas OPEN-01…06 de `docs/md/protocol-spec.md` §10 |
 | POS Autoservicio | ✅ | AUTO-01 | Cliente, simulador y CLI; solo contra el simulador. 328 tests del workspace. Comandos solo los de `protocol-spec.md` §7; preguntas OPEN-07 y OPEN-08 |
 | API async (tokio) | ✅ | ASYNC-01 | `AsyncLink`, `AsyncPosIntegrado`, `AsyncSimStream`; lógica de decisión compartida con `Link` en `exchange.rs`. 396 tests del workspace. `open_serial` solo compila y se prueba su error: sin puerto real. Sin cliente async de Autoservicio |
 | Publicación en crates.io | ⬜ | REL-01 (dueño) | Nombres libres al 2026-10-21 |
@@ -29,4 +29,4 @@ Qué es real hoy versus planificado. **Lo mantiene el orquestador** a partir de 
 - El MSRV 1.85 solo se comprobó en los `rust-version` declarados en `Cargo.lock` (ninguno supera 1.85): no se compiló con 1.85 porque este equipo tiene Rust 1.98.
 - Nada se probó con un POS real: el puerto serie solo se compiló; TCP y toda la lógica se probaron contra el simulador.
 - El CI de GitHub Actions no se ha ejecutado nunca (se dispara con push a `main`/`develop` o a mano): Linux/Windows sin verificar.
-- El protocolo no tiene documentación oficial pública en este repo: los bytes salen de los SDKs oficiales y hay 6 puntos sin confirmar (`docs/protocol-spec.md` §10) hasta HW-01.
+- El protocolo no tiene documentación oficial pública en este repo: los bytes salen de los SDKs oficiales y hay 6 puntos sin confirmar (`docs/md/protocol-spec.md` §10) hasta HW-01.

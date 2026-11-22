@@ -21,10 +21,10 @@ Estos archivos son **de solo lectura para los agentes** (AGENTS.md §5). Si algo
 
 | Documento | Ubicación |
 |:--|:--|
-| Protocolo serial (normativo: tramas, enlace, comandos, campos, códigos) | [`docs/protocol-spec.md`](../docs/protocol-spec.md) |
-| Simulador de POS (escenarios, servidor TCP) | [`docs/simulator-spec.md`](../docs/simulator-spec.md) |
-| Pruebas manuales con un POS real | [`docs/hardware-testing.md`](../docs/hardware-testing.md) |
-| Publicación en crates.io | [`docs/release.md`](../docs/release.md) |
+| Protocolo serial (normativo: tramas, enlace, comandos, campos, códigos) | [`docs/md/protocol-spec.md`](../docs/md/protocol-spec.md) |
+| Simulador de POS (escenarios, servidor TCP) | [`docs/md/simulator-spec.md`](../docs/md/simulator-spec.md) |
+| Pruebas manuales con un POS real | [`docs/md/hardware-testing.md`](../docs/md/hardware-testing.md) |
+| Publicación en crates.io | [`docs/md/release.md`](../docs/md/release.md) |
 | Plan de tareas | [`tasks/README.md`](../tasks/README.md) |
 | Proyecto que consumirá el SDK (solo lectura) | `../rework-sistema-facturacion/` (app de escritorio Tauri, `docs/desktop-spec.md`) |
 | SDKs oficiales (referencia, BSD-3) | `github.com/TransbankDevelopers/transbank-pos-sdk-{nodejs,dotnet,c,java,python}` |

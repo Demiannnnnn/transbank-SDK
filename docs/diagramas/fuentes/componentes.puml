@@ -1,0 +1,80 @@
+@startuml componentes
+!include ../../plantilla/estilo.puml
+title Componentes del workspace — transbank-SDK (C4 nivel 2-3)
+
+package "Host Application (Caja / Kiosco)" {
+  component "Software de Comercio" as app
+}
+
+package "transbank-pos (librería)" {
+  folder "client" {
+    component "PosIntegrado" as pos_int
+    component "PosAutoservicio" as pos_auto
+    component "AsyncPosIntegrado\n(feature tokio)" as pos_async
+  }
+
+  folder "link" {
+    component "Link" as link_comp
+    component "exchange\n(lógica de intercambio)" as exchange
+    component "LinkConfig\n(timeouts y reintentos)" as link_cfg
+  }
+
+  folder "protocol (sans-IO)" {
+    component "lrc (checksum)" as lrc
+    component "frame (encoder)" as frame
+    component "decoder (FrameDecoder)" as decoder
+    component "message (requests & responses)" as message
+    component "codes & types\n(Amount, Ticket, ResponseCode)" as types
+  }
+
+  folder "transport" {
+    interface "Transport (trait)" as tr_trait
+    component "MemoryTransport" as tr_mem
+    component "TcpTransport" as tr_tcp
+    component "SerialTransport\n(feature serial)" as tr_serial
+  }
+}
+
+package "transbank-pos-sim (simulador)" {
+  component "PosSimulator (sans-IO)" as sim_core
+  component "Scenario (fallas)" as sim_scen
+  component "SimTransport" as sim_tr
+  component "tbk-pos-sim (TCP server)" as sim_bin
+}
+
+package "transbank-pos-cli" {
+  component "tbk-pos (CLI bin)" as cli_bin
+}
+
+node "Hardware / Red" {
+  component "Terminal POS Físico" as pos_hw
+}
+
+app --> pos_int : Invoca métodos tipados
+app --> pos_auto : Kioscos autoservicio
+app ..> pos_async : Runtime asíncrono
+
+pos_int --> link_comp : Delega comandos
+pos_auto --> link_comp
+pos_async --> link_comp
+
+link_comp --> exchange : Máquina de estados
+link_comp --> frame : Codifica tramas
+link_comp --> decoder : Decodifica bytes
+frame --> lrc : Calcula checksum
+decoder --> lrc : Valida checksum
+link_comp --> message : Parsea respuestas tipadas
+message --> types : Instancia newtypes
+
+link_comp --> tr_trait : Envía / recibe bytes
+tr_serial .up.|> tr_trait
+tr_tcp .up.|> tr_trait
+tr_mem .up.|> tr_trait
+sim_tr .up.|> tr_trait
+
+tr_serial --> pos_hw : Puerto serie (/dev/ttyACM*, COM*)
+tr_tcp --> sim_bin : TCP 127.0.0.1:7777
+cli_bin --> pos_int : Conecta a POS o simulador
+sim_bin --> sim_core : Procesa comandos
+sim_core --> message : Reutiliza parseo y serialización
+@enduml

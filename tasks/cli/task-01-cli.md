@@ -6,12 +6,12 @@
 | **Estado** | ✅ hecho |
 | **Rama** | `dev/cli-01-tbk-pos` |
 | **Depende de** | CLIENT-01, SERIAL-01 |
-| **Restricciones** | LEG-03, SEC-02, SEC-03, QA-03 · `security-model.md` §5 · `docs/hardware-testing.md` §2 (comandos que usa el dueño) |
+| **Restricciones** | LEG-03, SEC-02, SEC-03, QA-03 · `security-model.md` §5 · `docs/md/hardware-testing.md` §2 (comandos que usa el dueño) |
 | **Prioridad** | P1 |
 
 ## 1. Contexto
 
-Herramienta para probar un POS real (HW-01) y el simulador, y demo del SDK. Los comandos y flags de `docs/hardware-testing.md` §2 son obligatorios: el dueño los usará tal cual.
+Herramienta para probar un POS real (HW-01) y el simulador, y demo del SDK. Los comandos y flags de `docs/md/hardware-testing.md` §2 son obligatorios: el dueño los usará tal cual.
 
 ## 2. Requerimientos
 

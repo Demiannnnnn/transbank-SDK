@@ -6,7 +6,7 @@
 | **Estado** | ✅ hecho |
 | **Rama** | `dev/client-01-pos-integrado` |
 | **Depende de** | PROTO-02, LINK-01, SIM-01 |
-| **Restricciones** | API-01…07, LINK-03, QA-02, ADR-03, ADR-04 · `public-api.md` §8 · `docs/protocol-spec.md` §4, §8 |
+| **Restricciones** | API-01…07, LINK-03, QA-02, ADR-03, ADR-04 · `public-api.md` §8 · `docs/md/protocol-spec.md` §4, §8 |
 | **Prioridad** | P0 |
 
 ## 1. Contexto

@@ -44,4 +44,4 @@ El SDK no maneja secretos: no hay llaves, contraseñas ni datos completos de tar
 
 ## 6. Hardware real
 
-Solo el dueño (o un contribuidor con su propio terminal) conecta un POS real, siguiendo `docs/hardware-testing.md`, con montos mínimos y anulando lo cobrado. Las trazas que se suban al repo se anonimizan (commerce code de prueba, cuentas enmascaradas, sin vouchers reales).
+Solo el dueño (o un contribuidor con su propio terminal) conecta un POS real, siguiendo `docs/md/hardware-testing.md`, con montos mínimos y anulando lo cobrado. Las trazas que se suban al repo se anonimizan (commerce code de prueba, cuentas enmascaradas, sin vouchers reales).

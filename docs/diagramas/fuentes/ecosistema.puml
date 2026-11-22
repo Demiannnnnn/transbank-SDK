@@ -1,0 +1,46 @@
+@startuml ecosistema
+!include ../../plantilla/estilo.puml
+title Integración en el ecosistema raysac
+
+package "Puntos de Venta (Retail)" {
+  rectangle "rework-sistema-facturacion\n[App Escritorio Tauri/Rust]\nCaja atendida, gestión de ventas" as app_facturacion
+  rectangle "Kiosco Autoservicio\n[Terminal desatendido]\nAutoatención" as app_kiosco
+}
+
+package "SDKs Transbank & Pagos" {
+  rectangle "transbank-SDK\n[crates transbank-pos / sim / cli]\nComunicación POS serie/USB y simulación" as tbk_sdk
+  rectangle "tbk-pos-sim\n[Servidor simulador TCP]\nPruebas automáticas y CI" as tbk_sim
+  rectangle "tbk-pos (CLI)\n[Herramienta de terminal]\nDiagnóstico y auditoría en terreno" as tbk_cli
+}
+
+package "Servicios Tributarios & Facturación" {
+  rectangle "sii-sdk\n[Librería Rust]\nFirma electrónica y envío DTE al SII" as sii_sdk
+  cloud "Servicio de Impuestos Internos (SII)\nServidores SOV / DTE" as sii_cloud
+}
+
+package "Hardware & Entorno Bancario" {
+  node "Terminal POS Transbank\n(Verifone / Ingenico)" as pos_device
+  cloud "Red Transbank\n(Switch adquirente bancario)" as transbank_cloud
+}
+
+app_facturacion --> tbk_sdk : 1. Inicia cobro tarjeta (sale)
+app_kiosco --> tbk_sdk : 1. Inicia cobro autoservicio
+tbk_sdk --> pos_device : 2. Protocolo serial STX/ETX/LRC
+pos_device --> transbank_cloud : 3. Autorización financiera
+transbank_cloud --> pos_device : 4. Aprobación / Rechazo
+pos_device --> tbk_sdk : 5. Respuesta 0210 + Voucher
+tbk_sdk --> app_facturacion : 6. Ok(SaleResponse) aprobado
+
+app_facturacion --> sii_sdk : 7. Genera Boleta Electrónica
+sii_sdk --> sii_cloud : 8. Envía XML firmado (DTE)
+
+tbk_cli --> pos_device : Comandos manuales (poll, totals, close)
+app_facturacion ..> tbk_sim : Entorno de desarrollo / tests
+tbk_sim --> tbk_sdk : Emula POS Integrado y Autoservicio
+
+note bottom of tbk_sdk
+  transbank-SDK desacopla totalmente el protocolo de hardware
+  del sistema de facturación, permitiendo desarrollo sin POS físico
+  y protegiendo la regla de oro: nunca doble cobro.
+end note
+@enduml

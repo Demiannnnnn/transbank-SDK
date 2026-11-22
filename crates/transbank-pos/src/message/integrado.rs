@@ -1,4 +1,4 @@
-//! POS Integrado requests and their payloads (`docs/protocol-spec.md` §4).
+//! POS Integrado requests and their payloads (`docs/md/protocol-spec.md` §4).
 
 use crate::error::Result;
 use crate::protocol::types::{Amount, CommerceCode, OperationNumber, Ticket};
