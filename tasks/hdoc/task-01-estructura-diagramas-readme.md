@@ -3,7 +3,7 @@
 | Atributo | Detalle |
 |:--|:--|
 | **ID** | `HDOC-01` |
-| **Estado** | ⬜ pendiente |
+| **Estado** | ✅ terminada |
 | **Depende de** | — |
 | **Rama** | `dev/hdoc-01` |
 | **Prioridad** | P1 |
@@ -52,5 +52,35 @@ Repositorio: `transbank-SDK` (tipo: lib; API HTTP: no; interfaz de usuario: no).
 - [ ] Reporte con la salida real de los comandos y la lista de archivos generados (con número de páginas de cada PDF).
 
 ## Reporte
-
-_(lo completa agy)_
+- **Estado:** done
+- **Rama / commits:** dev/hdoc-01 · cfa4334, 861f7d6
+- **Hecho:**
+  - **RF-01:** `git mv` de todos los archivos Markdown de `docs/` hacia `docs/md/` (`protocol-spec.md`, `simulator-spec.md`, `hardware-testing.md`, `release.md`, `release-prep-2026-11.md`), manteniendo subcarpetas. Actualización exhaustiva de todas las referencias en `AGENTS.md`, `CLAUDE.md`, `.ai-context/`, `tasks/`, `README.md`, código y scripts de orquestación. Comprobado con `grep -rn` que no quedan referencias a rutas obsoletas.
+  - **RF-02:** Integración del kit de documentación común en `docs/plantilla/` (`raysac-informe.cls`, `estilo.puml`, `pandoc-filtro.lua`, `pandoc-macros.tex`, `referencia.docx`) y `docs/build-docs.sh`. Creación de directorios `docs/diagramas/{fuentes,svg,png}` y `docs/informes/`.
+  - **RF-03:** Creación de 8 diagramas PlantUML en `docs/diagramas/fuentes/` con el estilo unificado (`!include ../../plantilla/estilo.puml`), correspondientes fielmente a la arquitectura y código real: `contexto.puml`, `componentes.puml`, `clases-dominio.puml`, `ecosistema.puml`, `secuencia-venta.puml`, `secuencia-recuperacion-venta.puml`, `flujo-venta.puml` y `estados-enlace.puml`. Generación y versionado de sus 8 archivos SVG y 8 PNG correspondientes.
+  - **RF-04:** Reescritura exhaustiva y robusta de `README.md` conforme al estándar §5 (arquitectura visual PNG, stack con versiones exactas, guía paso a paso con simulador y memoria, tabla de variables y argumentos CLI, ejemplos síncronos y asíncronos, especificaciones normativas y tabla de informes formales vinculados a `docs/informes/<slug>/<slug>.{pdf,docx}`).
+  - **RF-05:** Incorporación de la regla de mantenimiento continuo de diagramas e informes en `AGENTS.md` §6.
+- **Archivos principales:**
+  - `README.md`
+  - `AGENTS.md`
+  - `docs/build-docs.sh`
+  - `docs/plantilla/*`
+  - `docs/diagramas/fuentes/*.puml` (8 diagramas)
+  - `docs/diagramas/svg/*.svg` (8 diagramas)
+  - `docs/diagramas/png/*.png` (8 diagramas)
+  - `docs/md/*.md` (archivos migrados)
+- **Comandos:**
+  - `cargo fmt --all --check` ✅
+  - `cargo clippy --workspace --all-targets --all-features -- -D warnings` ✅
+  - `cargo clippy -p transbank-pos --no-default-features -- -D warnings` ✅
+  - `cargo test --workspace --all-features` ✅ (405 tests pasados + 39 doctests)
+  - `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features` ✅
+  - `docs/build-docs.sh --check` ✅ (8 diagramas regenerados y validados idénticos; 0 errores)
+- **Decisiones:**
+  - `modelo-datos.puml` no aplica a este repositorio ya que no maneja base de datos ni migraciones de persistencia (librería/driver cliente POS).
+  - `despliegue.puml` y `casos-de-uso.puml` no aplican por tratarse de biblioteca y CLI sin infraestructura de servidor ni UI para usuarios finales.
+  - En `clases-dominio.puml` se modelaron los tipos públicos exactos del dominio (`PosIntegrado`, `PosAutoservicio`, `Link`, `Amount`, `Ticket`, `OperationNumber`, `CommerceCode`, respuestas tipadas).
+- **Pendiente / bloqueos:**
+  - Ninguno para HDOC-01. La compilación de informes PDF/DOCX corresponde a las siguientes tareas (HDOC-02, HDOC-03, HDOC-04).
+- **Desviaciones de la spec o de .ai-context:**
+  - Ninguna.
