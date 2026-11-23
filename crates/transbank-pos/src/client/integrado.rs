@@ -1,4 +1,4 @@
-//! [`PosIntegrado`]: typed client of the POS Integrado (`docs/protocol-spec.md` §4).
+//! [`PosIntegrado`]: typed client of the POS Integrado (`docs/md/protocol-spec.md` §4).
 
 use crate::codes::IntermediateStatus;
 use crate::error::Result;

@@ -1,0 +1,35 @@
+@startuml contexto
+!include ../../plantilla/estilo.puml
+title Contexto del sistema — transbank-SDK (C4 nivel 1)
+
+actor "Cajero / Operador" as cajero
+actor "Cliente (Pagador)" as cliente
+actor "Técnico / Integrador" as tecnico
+
+rectangle "Sistema de Facturación / Host\n[app escritorio Tauri / caja]\nrework-sistema-facturacion" as host
+rectangle "transbank-SDK\n[librería Rust]\ntransbank-pos" as sdk
+rectangle "Terminal POS Transbank\n[hardware físico]\nVerifone VX520 / Ingenico Desk 3500" as pos
+rectangle "Red Transbank\n[switch adquirente]\nAutorización bancaria" as red_tbk
+rectangle "Simulador POS\n[binario / memoria]\ntbk-pos-sim" as sim
+rectangle "CLI de Diagnóstico\n[binario]\ntbk-pos" as cli
+rectangle "SII (Facturación)\n[sistema externo]\nBoleta Electrónica DTE" as sii
+
+cajero --> host : Inicia cobro en caja
+cliente --> pos : Inserta tarjeta / ingresa clave PIN
+tecnico --> cli : Pruebas y diagnóstico
+
+host --> sdk : Invoca API pública\n(sale, refund, close)
+sdk --> pos : Tramas serie STX/ETX/LRC\n(USB / RS-232, 115200 8N1)
+pos --> red_tbk : Solicitud de autorización\n(Ethernet / 3G / 4G)
+red_tbk --> pos : Código de respuesta y autorización
+
+sdk ..> sim : Pruebas locales sans-hardware\n(TCP loopback / memoria)
+cli --> sdk : Ejecuta comandos de terminal
+host --> sii : Emite boleta fiscal tras pago aprobado
+
+note right of sdk
+  transbank-pos implementa el protocolo sans-IO,
+  manejo de enlace ACK/NAK/reintentos, clientes
+  tipados y redacción de datos sensibles.
+end note
+@enduml

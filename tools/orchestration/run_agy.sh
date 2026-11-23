@@ -19,8 +19,8 @@ PROMPT="You are the implementing agent of this repository. Your assigned task is
 You are on git branch '$BRANCH' (already checked out; work and commit only here).
 
 Instructions:
-1. Follow AGENTS.md strictly (it overrides everything). Read AGENTS.md, ALL of .ai-context/, tasks/README.md, your task file and every doc it references (always docs/protocol-spec.md) BEFORE writing code.
-2. Implement the WHOLE task. Do not ask for confirmation: no human is available. On ambiguity choose the most conservative option that satisfies .ai-context and docs/protocol-spec.md and write it in the task Report. Never invent protocol bytes.
+1. Follow AGENTS.md strictly (it overrides everything). Read AGENTS.md, ALL of .ai-context/, tasks/README.md, your task file and every doc it references (always docs/md/protocol-spec.md) BEFORE writing code.
+2. Implement the WHOLE task. Do not ask for confirmation: no human is available. On ambiguity choose the most conservative option that satisfies .ai-context and docs/md/protocol-spec.md and write it in the task Report. Never invent protocol bytes.
 3. Run and make pass from the repo root (AGENTS.md section 8): cargo fmt --all --check; cargo clippy --workspace --all-targets --all-features -- -D warnings; cargo clippy -p transbank-pos --no-default-features -- -D warnings; cargo test --workspace --all-features; RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --all-features. Fix errors for real (no allow attributes, no ignored tests, no unwrap/expect in production code).
 4. Commit on '$BRANCH' with Conventional Commits and 'Refs: TASK-<ID>'. At the end update the Estado row and the '## Reporte' section of your task file with REAL results, commit, and git push -u origin $BRANCH.
 5. NEVER touch main, develop or develop-AGENTS. Never modify sibling repositories. Never open real serial ports. Never run cargo publish.

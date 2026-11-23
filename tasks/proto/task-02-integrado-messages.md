@@ -6,7 +6,7 @@
 | **Estado** | ✅ hecho |
 | **Rama** | `dev/proto-02-integrado-messages` |
 | **Depende de** | PROTO-01 |
-| **Restricciones** | PROTO-01, PROTO-05…08, API-02…06, SEC-03, LEG-02, QA-01 · `docs/protocol-spec.md` §4, §5, §6, §9 · `public-api.md` §2–§5 |
+| **Restricciones** | PROTO-01, PROTO-05…08, API-02…06, SEC-03, LEG-02, QA-01 · `docs/md/protocol-spec.md` §4, §5, §6, §9 · `public-api.md` §2–§5 |
 | **Prioridad** | P0 |
 
 ## 1. Contexto

@@ -24,7 +24,7 @@ Motivación: el dueño necesita esta integración en `rework-sistema-facturacion
 | **POS Integrado** | Caja atendida: el cajero inicia el cobro desde el software | 115200 | Imprime el voucher en el propio POS; anulación por número de operación; totales y detalle del día |
 | **POS Autoservicio** | Kioscos y máquinas sin cajero | 19200 | Puede devolver el voucher al host para imprimirlo en la máquina; requiere inicialización; anula solo la última venta |
 
-Ambos usan el **mismo enlace** (tramas, ACK/NAK). Cambian los comandos y el orden de los campos (`docs/protocol-spec.md` §4–§7).
+Ambos usan el **mismo enlace** (tramas, ACK/NAK). Cambian los comandos y el orden de los campos (`docs/md/protocol-spec.md` §4–§7).
 
 ## 4. Operaciones (POS Integrado)
 

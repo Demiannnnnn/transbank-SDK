@@ -49,7 +49,7 @@ Las tareas del núcleo son **secuenciales** (`tasks/README.md` §3): una cola en
 
 - `main` y `develop` nunca se tocan; `develop-AGENTS` solo el orquestador; agy solo `dev/*`.
 - Un agente por worktree; los comandos `cargo` pesados se serializan con el wrapper de `~/.cache/telemetry-orchestration/bin/cargo` si existe (instalado por `telemetry-apps/tools/orchestration/native/setup-native.sh`); si no, `CARGO_BUILD_JOBS=2`.
-- Nadie publica en crates.io ni crea tags (`docs/release.md`).
+- Nadie publica en crates.io ni crea tags (`docs/md/release.md`).
 - Si la cuota Gemini está en 0 %, Claude implementa (CLAUDE.md), con el mismo flujo de rama `dev/*`, `validate.sh` y merge.
 
 ## Preparar un equipo

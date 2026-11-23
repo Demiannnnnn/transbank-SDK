@@ -1,0 +1,59 @@
+@startuml secuencia-venta
+!include ../../plantilla/estilo.puml
+title Secuencia — Venta con tarjeta en POS Integrado (Flujo exitoso)
+
+actor "Cajero / Host" as host
+participant "PosIntegrado" as client
+participant "Link" as link
+participant "Transport (Serie)" as tr
+participant "Terminal POS" as pos
+participant "Switch Transbank" as tbk
+
+host -> client : sale_with_status(&req, callback)
+activate client
+
+client -> link : request("0200|12000|T00001|||1", "0210", callback)
+activate link
+
+link -> tr : write_all(STX + "0200|..." + ETX + LRC)
+tr -> pos : Bytes de comando de venta
+
+pos --> tr : 0x06 (ACK)
+tr --> link : ACK recibido (intento 1 ok)
+
+note over link, pos : El POS toma control de la pantalla y el teclado
+
+pos -> tr : STX + "0900|01" + ETX + LRC
+tr -> link : Trama 0900 (Mensaje intermedio)
+link -> tr : 0x06 (ACK de trama intermedia)
+link -> host : callback(IntermediateStatus::Code(EsperandoTarjeta))
+
+note over pos : Cliente desliza o inserta chip\ne ingresa su PIN en el PIN pad
+
+pos -> tr : STX + "0900|03" + ETX + LRC
+tr -> link : Trama 0900
+link -> tr : 0x06 (ACK)
+link -> host : callback(IntermediateStatus::Code(SolicitandoAutorizacion))
+
+pos -> tbk : Solicitud ISO 8583 / Transbank
+tbk --> pos : Aprobación (código 00, auth 123456)
+
+pos -> tr : STX + "0210|00|597029414300|SIM01|T00001|123456|12000|..." + ETX + LRC
+tr -> link : Trama final 0210 (Respuesta de venta)
+
+link -> link : Valida LRC (checksum correcto)
+link -> tr : 0x06 (ACK de respuesta final)
+link --> client : payload crudo
+
+client -> client : parse_sale_response(payload)
+note over pos : POS imprime el voucher comercial
+
+client --> host : Ok(SaleResponse { response_code: Approved, ... })
+deactivate link
+deactivate client
+
+note right of host
+  sale.is_approved() == true
+  El comercio registra la venta y emite boleta.
+end note
+@enduml

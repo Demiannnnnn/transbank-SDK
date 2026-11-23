@@ -245,7 +245,7 @@ fn sale_args(fields: &[&str], payload: &str) -> Result<SaleArgs> {
 
 /// Parses a host request.
 ///
-/// Accepts the three sale variants of `docs/protocol-spec.md` OPEN-01: amount with or
+/// Accepts the three sale variants of `docs/md/protocol-spec.md` OPEN-01: amount with or
 /// without zero padding, empty or explicit voucher field, with or without a trailing
 /// `|` (`0200|000012000|ABC123|||0`, `0200|12000|ABC123||0|1|`,
 /// `0200|000012000|ABC123||0|0`).

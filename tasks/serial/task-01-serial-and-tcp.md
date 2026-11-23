@@ -6,7 +6,7 @@
 | **Estado** | ✅ hecho |
 | **Rama** | `dev/serial-01-serial-and-tcp` |
 | **Depende de** | LINK-01, CLIENT-01 |
-| **Restricciones** | API-07, API-08, SAFE-03, QA-03 · `public-api.md` §6, §8 · `docs/protocol-spec.md` §1 |
+| **Restricciones** | API-07, API-08, SAFE-03, QA-03 · `public-api.md` §6, §8 · `docs/md/protocol-spec.md` §1 |
 | **Prioridad** | P1 |
 
 ## 1. Contexto

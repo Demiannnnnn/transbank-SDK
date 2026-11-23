@@ -6,7 +6,7 @@
 | **Estado** | ✅ terminada |
 | **Rama** | `dev/auto-01-autoservicio` |
 | **Depende de** | CLIENT-01, SIM-01 (y CLI-01 para RF-04) |
-| **Restricciones** | PROTO-01, PROTO-05…08, API-01…07, QA-01, QA-02 · `docs/protocol-spec.md` §7, §9 · `docs/simulator-spec.md` §3 · `public-api.md` §5, §8 |
+| **Restricciones** | PROTO-01, PROTO-05…08, API-01…07, QA-01, QA-02 · `docs/md/protocol-spec.md` §7, §9 · `docs/md/simulator-spec.md` §3 · `public-api.md` §5, §8 |
 | **Prioridad** | P2 |
 
 ## 1. Contexto

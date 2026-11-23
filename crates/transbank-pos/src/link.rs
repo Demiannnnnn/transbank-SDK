@@ -1,5 +1,5 @@
 //! Link layer: sends frames, waits for ACK/NAK and responses with timeouts and retries
-//! (`docs/protocol-spec.md` §3, §4.2, §8).
+//! (`docs/md/protocol-spec.md` §3, §4.2, §8).
 //!
 //! This is the only place with time and retries. A frame is retransmitted only while
 //! it has not been acknowledged; once the POS acknowledged a command, the link never
@@ -184,7 +184,7 @@ impl<T: Transport, C: Clock> Link<T, C> {
     }
 
     /// Sends a command, waits for its ACK and collects the frames `expected` until
-    /// the end of the list (`docs/protocol-spec.md` §4.2).
+    /// the end of the list (`docs/md/protocol-spec.md` §4.2).
     ///
     /// Returns the payloads of the entries with an authorization code; the
     /// terminators (empty authorization) are consumed and dropped. Each frame must
@@ -200,7 +200,7 @@ impl<T: Transport, C: Clock> Link<T, C> {
         let mut entries = Vec::new();
         let mut frames = 0usize;
         // Each list frame gets a fresh `response_timeout`; a `0900` does not extend it
-        // (docs/protocol-spec.md §3.2 step 4).
+        // (docs/md/protocol-spec.md §3.2 step 4).
         let mut deadline = self.deadline(self.config.response_timeout);
         loop {
             let response = match self.receive(expected, deadline, self.config.response_timeout)? {

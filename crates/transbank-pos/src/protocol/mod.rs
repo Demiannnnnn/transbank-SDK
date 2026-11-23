@@ -2,7 +2,7 @@
 //!
 //! Nothing in this module performs I/O or reads the clock, so it can be reused by
 //! the link, the simulator and any async adapter. The format is described in
-//! `docs/protocol-spec.md` §2.
+//! `docs/md/protocol-spec.md` §2.
 //!
 //! ```
 //! use transbank_pos::protocol::{FrameDecoder, LinkEvent, encode_frame};

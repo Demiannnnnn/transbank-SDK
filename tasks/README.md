@@ -2,7 +2,7 @@
 
 Mismo formato que `rework-sistema-facturacion` y `telemetry-*`: cada tarea tiene contexto, requerimientos (`RF-*`), reglas, tests, DoD y una sección `## Reporte` que completa el agente.
 
-> Antes de tomar una tarea lee `AGENTS.md`, todo `.ai-context/` y [`../.ai-context/implementation-status.md`](../.ai-context/implementation-status.md). Si el código y una tarea discrepan, `.ai-context` y `docs/protocol-spec.md` mandan sobre el pseudocódigo de la tarea; repórtalo.
+> Antes de tomar una tarea lee `AGENTS.md`, todo `.ai-context/` y [`../.ai-context/implementation-status.md`](../.ai-context/implementation-status.md). Si el código y una tarea discrepan, `.ai-context` y `docs/md/protocol-spec.md` mandan sobre el pseudocódigo de la tarea; repórtalo.
 
 ## 1. Principios
 
@@ -54,7 +54,7 @@ tasks/
 
 | ID | Tarea | Notas |
 |:--|:--|:--|
-| REL-01 | Publicar en crates.io | El dueño publica 1.0.0 sin HW-01 (decisión 2026-10-22, `docs/release.md`) |
+| REL-01 | Publicar en crates.io | El dueño publica 1.0.0 sin HW-01 (decisión 2026-10-22, `docs/md/release.md`) |
 | INT-01 | Integrar en `rework-sistema-facturacion` (app Tauri: cobro con POS en la venta) | Se especifica en ese repo; consume la versión publicada o `git` |
 | FUT-01 | Bluetooth / POS Android de Transbank | Investigar si hay protocolo documentado |
 

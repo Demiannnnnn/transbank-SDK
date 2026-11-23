@@ -6,12 +6,12 @@
 | **Estado** | ✅ hecho |
 | **Rama** | `dev/proto-01-framing` |
 | **Depende de** | INFRA-01 |
-| **Restricciones** | PROTO-01…04, SAFE-02, API-05, API-06, ADR-05, ADR-06 · `docs/protocol-spec.md` §2 |
+| **Restricciones** | PROTO-01…04, SAFE-02, API-05, API-06, ADR-05, ADR-06 · `docs/md/protocol-spec.md` §2 |
 | **Prioridad** | P0 |
 
 ## 1. Contexto
 
-Base de todo el SDK: convertir payloads en tramas `STX payload ETX LRC` y reconocer tramas, ACK y NAK en un flujo de bytes que llega en trozos arbitrarios. Lee `docs/protocol-spec.md` §2 completo, en especial §2.3 (vectores) y §2.4 (máquina de estados).
+Base de todo el SDK: convertir payloads en tramas `STX payload ETX LRC` y reconocer tramas, ACK y NAK en un flujo de bytes que llega en trozos arbitrarios. Lee `docs/md/protocol-spec.md` §2 completo, en especial §2.3 (vectores) y §2.4 (máquina de estados).
 
 ## 2. Requerimientos
 

@@ -1,4 +1,4 @@
-//! Frame decoder: state machine of `docs/protocol-spec.md` §2.4 (ADR-05).
+//! Frame decoder: state machine of `docs/md/protocol-spec.md` §2.4 (ADR-05).
 
 use std::mem;
 

@@ -316,4 +316,4 @@ Soltar el futuro de una venta deja el resultado desconocido: se consulta `last_s
 
 ## 10. Simulador — `transbank-pos-sim`
 
-Ver `docs/simulator-spec.md`. Superficie pública: `PosSimulator`, `TerminalKind`, `Scenario`, `SimulatedSale`, `SimTransport` (implementa `Transport`), `TcpServer`; con la feature `tokio`, `AsyncSimStream` (`AsyncRead + AsyncWrite` directo sobre `PosSimulator`, sin `spawn` ni `tokio::io::duplex`).
+Ver `docs/md/simulator-spec.md`. Superficie pública: `PosSimulator`, `TerminalKind`, `Scenario`, `SimulatedSale`, `SimTransport` (implementa `Transport`), `TcpServer`; con la feature `tokio`, `AsyncSimStream` (`AsyncRead + AsyncWrite` directo sobre `PosSimulator`, sin `spawn` ni `tokio::io::duplex`).

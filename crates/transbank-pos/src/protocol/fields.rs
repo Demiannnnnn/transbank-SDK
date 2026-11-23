@@ -1,4 +1,4 @@
-//! Field helpers over a payload split by `|` (`docs/protocol-spec.md` §5, PROTO-05).
+//! Field helpers over a payload split by `|` (`docs/md/protocol-spec.md` §5, PROTO-05).
 
 use super::types::{CardBrand, CardType, PosDate, PosTime, parse_digits};
 use crate::codes::ResponseCode;

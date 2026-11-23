@@ -1,7 +1,7 @@
 //! Serial port transport, port listing and auto-detection (feature `serial`).
 //!
 //! The POS appears as a USB CDC-ACM serial port (`COMx`, `/dev/ttyACM*`,
-//! `/dev/cu.usbmodem*`). Format 8N1 without flow control (`docs/protocol-spec.md` §1).
+//! `/dev/cu.usbmodem*`). Format 8N1 without flow control (`docs/md/protocol-spec.md` §1).
 
 use std::io::{ErrorKind, Read, Write};
 use std::time::Duration;

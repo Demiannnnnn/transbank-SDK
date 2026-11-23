@@ -6,7 +6,7 @@
 | **Estado** | ✅ hecho |
 | **Rama** | `dev/link-01-transport-and-link` |
 | **Depende de** | PROTO-02 (usa `IntermediateStatus`, `parse_intermediate` y los `FC_*`) |
-| **Restricciones** | LINK-01…07, SAFE-02, SAFE-03, SEC-02, QA-03, ADR-04, ADR-08, ADR-09 · `docs/protocol-spec.md` §3, §4.2, §8 · `public-api.md` §6–§7 · `security-model.md` §3 |
+| **Restricciones** | LINK-01…07, SAFE-02, SAFE-03, SEC-02, QA-03, ADR-04, ADR-08, ADR-09 · `docs/md/protocol-spec.md` §3, §4.2, §8 · `public-api.md` §6–§7 · `security-model.md` §3 |
 | **Prioridad** | P0 |
 
 ## 1. Contexto

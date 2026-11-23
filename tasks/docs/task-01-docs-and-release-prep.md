@@ -6,7 +6,7 @@
 | **Estado** | ✅ hecho |
 | **Rama** | `dev/docs-01-release-prep` |
 | **Depende de** | CLI-01 |
-| **Restricciones** | API-06, LEG-01…04 · `docs/release.md` §1 · `conventions.md` §1, §7 |
+| **Restricciones** | API-06, LEG-01…04 · `docs/md/release.md` §1 · `conventions.md` §1, §7 |
 | **Prioridad** | P1 |
 
 ## 1. Contexto
@@ -27,7 +27,7 @@ Dejar los tres crates listos para publicar (sin publicar: eso es REL-01, del due
 Formato Keep a Changelog, sección `[Unreleased]` con todo lo de v0.1.0.
 
 ### RF-04 Empaquetado
-- Metadatos de `docs/release.md` §1 en cada `Cargo.toml`.
+- Metadatos de `docs/md/release.md` §1 en cada `Cargo.toml`.
 - `NOTICE` y licencias dentro de cada paquete: si `include` con rutas `../../` no funciona, usar `license-file` no aplica (es dual); la solución aceptada es un `build`-free: copiar `LICENSE-MIT`, `LICENSE-APACHE` y `NOTICE` dentro de cada crate **como archivos idénticos** y un test (`tests/license_files.rs` en el crate raíz de la lib) que verifique que son byte a byte iguales a los de la raíz. Documenta la decisión.
 - `cargo publish --dry-run -p transbank-pos` sin warnings. Para `-sim` y `-cli` el dry-run falla porque `transbank-pos` no está en crates.io: verificar en su lugar con `cargo package -p <crate> --list` y reportarlo.
 

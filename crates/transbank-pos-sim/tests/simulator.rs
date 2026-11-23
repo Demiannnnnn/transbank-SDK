@@ -1,4 +1,4 @@
-//! Simulator behaviour: POS-side link, business rules (`docs/simulator-spec.md` §3),
+//! Simulator behaviour: POS-side link, business rules (`docs/md/simulator-spec.md` §3),
 //! scenarios (§2), `SimTransport` with the real link, and the TCP server.
 
 use std::io::{Read, Write};

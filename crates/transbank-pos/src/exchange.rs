@@ -79,7 +79,7 @@ impl AckWait {
     /// `implicit_ack`: a frame (or a frame with a bad LRC) received before the ACK
     /// counts as the ACK. Only for commands that expect a response; a command
     /// without response (`0100`, `0300`, `0070`, `0260|0|`) ends only with an ACK
-    /// (`docs/protocol-spec.md` §3.3), so frames are discarded while waiting.
+    /// (`docs/md/protocol-spec.md` §3.3), so frames are discarded while waiting.
     pub(crate) fn new(max_attempts: u8, implicit_ack: bool) -> Self {
         Self {
             max_attempts: max_attempts.max(1),
@@ -249,7 +249,7 @@ impl ListTailWait {
     pub(crate) fn on_event(&mut self, event: LinkEvent) -> ListTailStep {
         match event {
             LinkEvent::BadLrc { .. } => {
-                // Same limit as while waiting for a response (docs/protocol-spec.md §3.2).
+                // Same limit as while waiting for a response (docs/md/protocol-spec.md §3.2).
                 self.bad_lrc = self.bad_lrc.saturating_add(1);
                 if self.bad_lrc > self.max_bad_lrc {
                     ListTailStep::BadLrcExhausted(Error::BadLrc {

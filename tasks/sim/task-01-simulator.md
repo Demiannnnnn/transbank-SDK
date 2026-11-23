@@ -6,12 +6,12 @@
 | **Estado** | ✅ hecho |
 | **Rama** | `dev/sim-01-simulator` |
 | **Depende de** | PROTO-02, LINK-01 |
-| **Restricciones** | PROTO-02, SEC-04, LEG-03, QA-03, SAFE-02 · `docs/simulator-spec.md` completo · `docs/protocol-spec.md` §3–§6 |
+| **Restricciones** | PROTO-02, SEC-04, LEG-03, QA-03, SAFE-02 · `docs/md/simulator-spec.md` completo · `docs/md/protocol-spec.md` §3–§6 |
 | **Prioridad** | P0 |
 
 ## 1. Contexto
 
-Un POS falso para probar el cliente sin hardware (QA-02) y para que los usuarios del SDK prueben sus apps. Implementa `docs/simulator-spec.md`. Integrado completo; Autoservicio lo agrega AUTO-01 (deja `TerminalKind::Autoservicio` respondiendo ACK a `0100` y código 12 "Transacción No Soportada" al resto, documentado como pendiente).
+Un POS falso para probar el cliente sin hardware (QA-02) y para que los usuarios del SDK prueben sus apps. Implementa `docs/md/simulator-spec.md`. Integrado completo; Autoservicio lo agrega AUTO-01 (deja `TerminalKind::Autoservicio` respondiendo ACK a `0100` y código 12 "Transacción No Soportada" al resto, documentado como pendiente).
 
 ## 2. Requerimientos
 

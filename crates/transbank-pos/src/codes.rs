@@ -4,7 +4,7 @@ use std::fmt;
 
 macro_rules! response_codes {
     ($($(#[$meta:meta])* $variant:ident = $code:literal => $message:literal,)+) => {
-        /// Response code reported by the POS (`docs/protocol-spec.md` §9).
+        /// Response code reported by the POS (`docs/md/protocol-spec.md` §9).
         ///
         /// A non-approved code is a business result, not an [`Error`](crate::Error)
         /// (ADR-03). Unknown codes are kept in [`ResponseCode::Other`].
@@ -68,7 +68,7 @@ macro_rules! response_codes {
 }
 
 // Messages from `responseCodes.js` of the official Node SDK (transbank-pos-sdk-nodejs,
-// BSD-3-Clause; see NOTICE), as listed in docs/protocol-spec.md §9.
+// BSD-3-Clause; see NOTICE), as listed in docs/md/protocol-spec.md §9.
 response_codes! {
     Approved = 0 => "Aprobado",
     Rejected = 1 => "Rechazado",

@@ -1,6 +1,6 @@
 # Simulador de POS — `transbank-pos-sim`
 
-Un POS falso que habla el protocolo de `docs/protocol-spec.md` desde el lado del terminal. Sirve para:
+Un POS falso que habla el protocolo de `docs/md/protocol-spec.md` desde el lado del terminal. Sirve para:
 
 1. Los tests de integración del SDK (QA-02).
 2. Los tests de las apps que usan el SDK (p. ej. `rework-sistema-facturacion`).

@@ -128,7 +128,7 @@
 //!
 //! Rust 1.85 (edition 2024). Licensed under either of Apache License 2.0 or MIT
 //! license at your option. Protocol specification:
-//! [`docs/protocol-spec.md`](https://github.com/Demiannnnnn/transbank-SDK/blob/main/docs/protocol-spec.md).
+//! [`docs/md/protocol-spec.md`](https://github.com/Demiannnnnn/transbank-SDK/blob/main/docs/md/protocol-spec.md).
 
 #![forbid(unsafe_code)]
 

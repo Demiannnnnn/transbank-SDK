@@ -1,4 +1,4 @@
-//! [`TcpServer`]: serves a [`PosSimulator`] over TCP (`docs/simulator-spec.md` §5).
+//! [`TcpServer`]: serves a [`PosSimulator`] over TCP (`docs/md/simulator-spec.md` §5).
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, ToSocketAddrs};

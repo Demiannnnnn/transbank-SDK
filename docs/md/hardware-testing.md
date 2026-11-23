@@ -1,6 +1,6 @@
 # Pruebas con un POS real (HW-01)
 
-Solo las hace **el dueño** (o un contribuidor con su propio terminal). Ningún agente conecta hardware (AGENTS.md §7). Objetivo: cerrar las preguntas abiertas de `docs/protocol-spec.md` §10 y validar antes de publicar en crates.io (`docs/release.md`).
+Solo las hace **el dueño** (o un contribuidor con su propio terminal). Ningún agente conecta hardware (AGENTS.md §7). Objetivo: cerrar las preguntas abiertas de `docs/md/protocol-spec.md` §10 y validar antes de publicar en crates.io (`docs/md/release.md`).
 
 ## 1. Requisitos
 
@@ -40,5 +40,5 @@ Anota en cada paso: resultado, código de respuesta y la línea de la traza. **M
 ## 3. Después
 
 - Subir la traza **anonimizada** a `crates/transbank-pos/tests/fixtures/hw/<modelo>-<fecha>.txt` (rama `dev/hw-01-traces`): commerce code reemplazado por `597029414300`, sin vouchers, cuentas enmascaradas.
-- El orquestador actualiza `docs/protocol-spec.md` §10 (preguntas cerradas, con la evidencia) y crea tareas `fix` si el comportamiento real difiere.
-- Con todo en verde, el dueño decide la publicación (`docs/release.md`).
+- El orquestador actualiza `docs/md/protocol-spec.md` §10 (preguntas cerradas, con la evidencia) y crea tareas `fix` si el comportamiento real difiere.
+- Con todo en verde, el dueño decide la publicación (`docs/md/release.md`).

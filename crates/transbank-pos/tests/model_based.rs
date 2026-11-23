@@ -1,6 +1,6 @@
 //! Model-based test: random sequences of operations through `PosIntegrado` against
 //! the simulator must agree with a simple model of the POS business rules
-//! (`docs/simulator-spec.md` §3): sales, refunds, totals, detail, last sale, close.
+//! (`docs/md/simulator-spec.md` §3): sales, refunds, totals, detail, last sale, close.
 
 use proptest::prelude::*;
 use transbank_pos::transport::ManualClock;
