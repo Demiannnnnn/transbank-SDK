@@ -1,0 +1,53 @@
+@startuml despliegue
+!include ../../plantilla/estilo.puml
+title Despliegue de infraestructura y conectividad — transbank-SDK
+
+node "Host / Computador de Caja" as host_node {
+  rectangle "Software de Comercio\n[App Tauri / CLI / Kiosco]" as app_inst
+  rectangle "transbank-pos\n[Librería Rust en proceso]" as sdk_inst
+
+  folder "Controladores de Sistema Operativo" as os_drivers {
+    rectangle "Linux: udev + cdc-acm / ftdi_sio\n/dev/ttyUSB0, /dev/ttyACM0 (dialout)" as drv_linux
+    rectangle "macOS: IOKit USB Serial\n/dev/cu.usbserial-*, /dev/cu.usbmodem*" as drv_mac
+    rectangle "Windows: usbser.sys / FTDI VCP\nCOM1, COM3, COM4" as drv_win
+  }
+}
+
+node "Entorno Local de Pruebas / CI" as test_node {
+  rectangle "tbk-pos-sim\n[Binario simulador TCP]\n127.0.0.1:7777" as sim_inst
+}
+
+node "Terminal Físico POS Transbank" as pos_node {
+  rectangle "POS Integrado / Autoservicio\n[Verifone VX520 / Ingenico Desk 3500]\nFirmware Transbank POS Integrado" as pos_hw_inst
+  rectangle "Puente USB-Serie Integrado\n[FTDI / CP2102 / CH340]" as bridge_hw
+}
+
+cloud "Infraestructura Transbank" as tbk_cloud {
+  rectangle "Switch de Autorización\n[Red Adquirente Transbank]" as switch_tbk
+}
+
+app_inst --> sdk_inst : Enlace estático (crate Cargo)
+sdk_inst --> drv_linux : SerialTransport (feature "serial")
+sdk_inst --> drv_mac : SerialTransport
+sdk_inst --> drv_win : SerialTransport
+
+drv_linux --> bridge_hw : Cable USB / RS-232 (115200 / 19200 8N1)
+drv_mac --> bridge_hw : Cable USB / RS-232
+drv_win --> bridge_hw : Cable USB / RS-232
+bridge_hw --> pos_hw_inst : UART interno
+
+sdk_inst ..> sim_inst : TcpTransport (TCP loopback 127.0.0.1)
+
+pos_hw_inst --> switch_tbk : Ethernet / 3G / 4G (ISO 8583)
+
+note bottom of host_node
+  Aislamiento de seguridad:
+  El host no maneja llaves criptográficas ni datos completos de tarjeta.
+  Toda la comunicación de pago se delega al firmware del POS.
+end note
+
+note bottom of sim_inst
+  El simulador TCP corre en localhost sin privilegios ni hardware,
+  permitiendo integración continua y pruebas end-to-end completas.
+end note
+@enduml

@@ -1,0 +1,1036 @@
+\documentclass{../../plantilla/raysac-informe}
+
+\producto{transbank-SDK}
+\titulo{Informe Técnico de Arquitectura, Protocolo y Diseño}
+\titulocorto{Informe Técnico}
+\version{1.0.0}
+\fecha{2026-11-22}
+\clasificacion{Uso interno}
+\autor{raysac}
+
+\begin{document}
+
+\portada
+
+\begin{controlversiones}
+  \cvfila{1.0}{2026-11-22}{raysac}{Versión inicial exhaustiva del informe técnico: arquitectura sans-IO, protocolo de tramas, modelo de datos, API pública, seguridad, pruebas y runbooks.}
+\end{controlversiones}
+
+\avisolegalestandar
+
+\clearpage
+\preliminares
+
+\section{Resumen ejecutivo}
+
+\subsection{Propósito y visión técnica del proyecto}
+El proyecto \texttt{transbank-SDK} implementa un kit de desarrollo de software (SDK) no oficial en el
+lenguaje de programación Rust para la integración directa, segura y de alto rendimiento con terminales
+físicos de punto de venta (POS) operados por la empresa adquirente Transbank en Chile. La biblioteca
+soporta los protocolos normativos de los dos modelos comerciales dominantes en el mercado chileno:
+\textbf{POS Integrado} (terminales atendidos en caja) y \textbf{POS Autoservicio} (kioscos y máquinas
+desatendidas).
+
+El proyecto fue concebido para resolver la ausencia de un SDK moderno, seguro y tipado en Rust que
+permita vincular software de escritorio y sistemas embebidos de comercio con el hardware de pago
+mediante interfaces serie físicas (RS-232 y USB CDC-ACM) o puentes de red TCP. El diseño garantiza
+inmunidad contra estados de fallo ambiguos, asegurando de forma determinista la protección del
+comercio y del consumidor.
+
+\subsection{Motivación dentro del ecosistema retail}
+La motivación principal del proyecto surge de la necesidad de dotar a la aplicación de punto de venta
+\texttt{rework-sistema-facturacion} (sistema de escritorio basado en el framework Tauri y Rust) de una
+capacidad de cobro con tarjeta ágil y confiable. Siguiendo las directrices estratégicas del ecosistema
+raysac, se determinó desarrollar esta solución como un módulo de infraestructura completamente genérico,
+independiente y desacoplado, sin tipos propietarios de facturación, liberado bajo doble licencia
+código abierto (\texttt{MIT OR Apache-2.0}) para beneficio de la comunidad tecnológica.
+
+\subsection{Principios rectores del diseño}
+La arquitectura de \texttt{transbank-SDK} se fundamenta en cuatro principios normativos e inviolables:
+\begin{enumerate}
+  \item \textbf{Arquitectura Sans-IO primero (ADR-01):} toda la lógica de encuadre, análisis de tramas,
+    cálculo de redundancia longitudinal (LRC) y formateo de mensajes reside en módulos puros, libres de
+    llamadas al sistema operativo, entrada/salida o reloj. Esto habilita pruebas deterministas basadas en
+    propiedades (\texttt{proptest}) y permite que el simulador reutilice el código exacto de producción.
+  \item \textbf{Regla de oro: ``Nunca Doble Cobro'' (ADR-04, LINK-03):} una vez que un comando de venta o
+    anulación ha sido acusado con un byte ACK por el POS, el SDK prohíbe terminantemente reenviar la trama
+    ante un timeout o interrupción de canal. El resultado se declara formalmente como desconocido y se
+    fuerza un protocolo de reconciliación mediante la consulta de última venta (\texttt{last\_sale}).
+  \item \textbf{El rechazo financiero no es un error (ADR-03):} una tarjeta rechazada por falta de fondos,
+    clave errónea o bloqueo es un resultado normal de negocio. La API devuelve \texttt{Ok(SaleResponse)}
+    donde el método \texttt{is\_approved()} evalúa a \texttt{false}. El tipo \texttt{Err} se reserva
+    exclusivamente para anomalías de comunicación o violaciones del protocolo serie.
+  \item \textbf{Robustez estricta sin pánicos ni código inseguro (SAFE-01, AGENTS.md §6):} el workspace
+    prohíbe de forma absoluta el uso de \texttt{unsafe} (\texttt{\#![forbid(unsafe\_code)]}) y el uso de
+    métodos que provoquen pánico (\texttt{unwrap}, \texttt{expect}, \texttt{panic!}) en código de producción,
+    utilizando buffers acotados para impedir desbordamientos de memoria.
+\end{enumerate}
+
+\subsection{Resumen de métricas del repositorio}
+La Tabla~\ref{tab:metricas-repo} resume el estado técnico cuantitativo verificado en el repositorio.
+
+\begin{longtable}{@{}p{6.5cm}p{4.5cm}p{3.5cm}@{}}
+\caption{Métricas técnicas verificadas del workspace transbank-SDK.}\label{tab:metricas-repo}\\
+\toprule
+\textbf{Métrica / Componente} & \textbf{Valor verificado} & \textbf{Referencia} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Métrica / Componente} & \textbf{Valor verificado} & \textbf{Referencia} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Crates en el workspace & 3 (\texttt{pos}, \texttt{sim}, \texttt{cli}) & \texttt{Cargo.toml} \\
+Edición de Rust / MSRV & Edición 2024 / MSRV 1.85 & \texttt{Cargo.toml} \\
+Total de pruebas automatizadas & 401 pruebas (unitarias, integración, doc) & \texttt{cargo test} \\
+Mutantes analizados (\texttt{cargo-mutants}) & 654 mutantes (0 escapes) & \texttt{TEST-01} \\
+Lints de compilación y Clippy & Deny estricto sin warnings & \texttt{[workspace.lints]} \\
+Licencia de distribución & Dual MIT / Apache-2.0 & \texttt{LICENSE-*} \\
+\end{longtable}
+
+\clearpage
+\section{Definición del problema, actores y alcance}
+
+\subsection{Contexto de pagos presenciales en Chile}
+En el mercado minorista chileno, la captura presencial de tarjetas bancarias (crédito, débito Redcompra
+y prepago) se efectúa mayoritariamente mediante terminales físicos provistos por Transbank. Existen dos
+modalidades operativas:
+\begin{itemize}
+  \item \textbf{POS Autónomo (Tradicional):} el cajero digita manualmente el monto en el teclado del POS.
+    Esta modalidad introduce errores humanos de digitación, descuadraturas de caja y lentitud en la atención.
+  \item \textbf{POS Integrado / Autoservicio:} el software de punto de venta (POS host) envía automáticamente
+    el monto exacto y el número de boleta al terminal a través de un cable USB o RS-232, eliminando la
+    digitación manual y garantizando la cuadratura automática de los pagos.
+\end{itemize}
+
+\subsection{Actores del sistema y responsabilidades}
+El sistema interactúa con seis entidades lógicas y humanas:
+\begin{itemize}
+  \item \textbf{Comercio:} entidad comercial titular de un contrato de afiliación con Transbank, identificada
+    por un código de comercio (\texttt{commerce\_code}) de hasta 12 dígitos numéricos.
+  \item \textbf{Host (Computador de Caja):} equipo informático que ejecuta el software de punto de venta y
+    utiliza este SDK como biblioteca de enlace para solicitar cobros.
+  \item \textbf{Terminal POS:} dispositivo de hardware seguro (Verifone VX520, Ingenico Desk 3500) certificado
+    por Transbank. Lee el chip/banda/NFC, solicita el PIN y se comunica directamente con el switch adquirente.
+  \item \textbf{Cliente (Pagador):} titular de la tarjeta que autoriza la transacción mediante su clave secreta.
+  \item \textbf{Switch Transbank:} red adquirente bancaria que aprueba o rechaza los cargos financieros.
+  \item \textbf{Desarrollador / Integrador:} ingeniero que programa sobre la API pública del SDK.
+\end{itemize}
+
+\subsection{Modalidades de terminal: Integrado vs Autoservicio}
+La Tabla~\ref{tab:terminal-comparacion} compara las características técnicas y operativas de ambos modelos.
+
+\begin{longtable}{@{}p{3.2cm}p{5.5cm}p{5.5cm}@{}}
+\caption{Comparación técnica entre POS Integrado y POS Autoservicio.}\label{tab:terminal-comparacion}\\
+\toprule
+\textbf{Característica} & \textbf{POS Integrado} & \textbf{POS Autoservicio} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Característica} & \textbf{POS Integrado} & \textbf{POS Autoservicio} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Velocidad serie por defecto & 115.200 baudios & 19.200 baudios \\
+Entorno operativo & Caja atendida por cajero & Kioscos, tótems y máquinas desatendidas \\
+Impresión de vouchers & Impreso directamente por el POS & Impreso en el POS o devuelto al host \\
+Procedimiento de arranque & No requiere inicialización previa & Requiere comando de inicialización (1000) \\
+Comando de venta & Código \texttt{0200} & Código \texttt{1000} \\
+Comando de anulación & Por número de operación (\texttt{1200}) & Anula solo la última venta (\texttt{1020}) \\
+Totales y Detalle del día & Soportados (\texttt{0700}, \texttt{0260}) & No soportados por el protocolo \\
+\end{longtable}
+
+\subsection{Alcance técnico y exclusiones expresas}
+Para mantener un enfoque de seguridad y especialización rigurosa, se establecen las siguientes delimitaciones:
+\begin{itemize}
+  \item \textbf{No es Webpay:} el SDK no interactúa con servicios web, REST APIs ni soluciones de comercio
+    electrónico (Webpay Plus, Oneclick, Transbank REST).
+  \item \textbf{Fuera del alcance PCI DSS (SEC-01):} el SDK nunca solicita, recibe ni almacena el número de
+    tarjeta completo (PAN), el código de verificación (CVV) ni la clave personal (PIN). Toda la captura de
+    datos sensibles ocurre dentro del módulo de seguridad física del terminal (PIN pad).
+  \item \textbf{Sin lógica tributaria:} el SDK no genera boletas electrónicas ni documentos tributarios (DTE)
+    ni se conecta con el Servicio de Impuestos Internos (SII).
+  \item \textbf{Sin certificación oficial de marca (LEG-03):} este software es un desarrollo independiente
+    no oficial. No reemplaza los procesos de homologación que Transbank pueda requerir a comercios específicos.
+\end{itemize}
+
+\clearpage
+\section{Requisitos del sistema}
+
+\subsection{Requisitos funcionales}
+La Tabla~\ref{tab:requisitos-funcionales} enumera los requisitos funcionales implementados en el SDK.
+
+\begin{longtable}{@{}p{1.4cm}p{7.2cm}p{2.2cm}p{3.4cm}@{}}
+\caption{Requisitos funcionales del sistema transbank-SDK.}\label{tab:requisitos-funcionales}\\
+\toprule
+\textbf{ID} & \textbf{Descripción funcional} & \textbf{Prioridad} & \textbf{Estado} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Descripción funcional} & \textbf{Prioridad} & \textbf{Estado} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+RF-01 & Enmarcado y desenmarcado de tramas STX/ETX con checksum LRC. & P0 & Implementado (PROTO-01) \\
+RF-02 & Parsing de mensajes y respuestas del POS Integrado. & P0 & Implementado (PROTO-02) \\
+RF-03 & Control de enlace con ACK, NAK y reintentos automáticos acotados. & P0 & Implementado (LINK-01) \\
+RF-04 & Manejo de temporizadores configurables de respuesta y acuse de recibo. & P0 & Implementado (LINK-01) \\
+RF-05 & Filtrado y notificación de tramas intermedias de estado (0900). & P0 & Implementado (LINK-01) \\
+RF-06 & Cliente de alto nivel para POS Integrado con métodos síncronos tipados. & P0 & Implementado (CLIENT-01) \\
+RF-07 & Comunicación por puerto serie físico con autodetección de terminales. & P1 & Implementado (SERIAL-01) \\
+RF-08 & Comunicación por socket TCP para puentes de red y pruebas locales. & P1 & Implementado (SERIAL-01) \\
+RF-09 & Interfaz de línea de comandos (\texttt{tbk-pos}) con salida humana y JSON. & P1 & Implementado (CLI-01) \\
+RF-10 & Simulador de terminal POS sans-IO con inyección de fallas y servidor TCP. & P0 & Implementado (SIM-01) \\
+RF-11 & Soporte de operaciones completas para terminales POS Autoservicio. & P2 & Implementado (AUTO-01) \\
+RF-12 & Cliente asíncrono con runtime Tokio (\texttt{AsyncPosIntegrado}). & P2 & Implementado (ASYNC-01) \\
+RF-13 & Consulta de última venta (\texttt{last\_sale}) para reconciliación post-falla. & P0 & Implementado (CLIENT-01) \\
+RF-14 & Anulación tipada de transacciones de crédito del día. & P0 & Implementado (CLIENT-01) \\
+RF-15 & Consulta de totales acumulados y descarga de detalle de ventas. & P1 & Implementado (CLIENT-01) \\
+RF-16 & Operaciones multicódigo para centros comerciales y comisionistas. & P1 & Implementado (CLIENT-01) \\
+\end{longtable}
+
+\subsection{Requisitos no funcionales}
+La Tabla~\ref{tab:requisitos-no-funcionales} resume las restricciones técnicas y arquitectónicas.
+
+\begin{longtable}{@{}p{1.6cm}p{7.4cm}p{2.2cm}p{3.0cm}@{}}
+\caption{Requisitos no funcionales de calidad y seguridad.}\label{tab:requisitos-no-funcionales}\\
+\toprule
+\textbf{ID} & \textbf{Descripción no funcional} & \textbf{Categoría} & \textbf{Regla del repo} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Descripción no funcional} & \textbf{Categoría} & \textbf{Regla del repo} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+RNF-01 & Cero código inseguro (\texttt{\#![forbid(unsafe\_code)]}) en todo el workspace. & Robustez & \texttt{SAFE-01} \\
+RNF-02 & Ausencia total de pánicos en producción (\texttt{unwrap}/\texttt{expect} denegados). & Estabilidad & AGENTS.md §6 \\
+RNF-03 & Representación de montos como enteros en CLP (prohibido float \texttt{f32}/\texttt{f64}). & Integridad & \texttt{API-03} \\
+RNF-04 & Búferes estrictamente acotados (payload máximo 4096 bytes). & Rendimiento & \texttt{SAFE-02} \\
+RNF-05 & Redacción estricta de números de cuenta y vouchers en trazas y \texttt{Debug}. & Privacidad & \texttt{SEC-02}, \texttt{SEC-03} \\
+RNF-06 & Determinismo absoluto en pruebas unitarias mediante tiempo inyectable. & Calidad QA & \texttt{QA-03} \\
+RNF-07 & Tiempos de ejecución de la suite de pruebas inferior a 60 segundos. & Eficiencia & \texttt{QA-04} \\
+RNF-08 & Dual licensing permisivo compatible con ecosistema corporativo. & Legal & \texttt{LEG-01} \\
+\end{longtable}
+
+\clearpage
+\section{Arquitectura del software y diseño de componentes}
+
+\subsection{Visión arquitectónica global}
+La arquitectura de \texttt{transbank-SDK} sigue el patrón de separación de responsabilidades en capas
+concéntricas y desacopladas. La Figura~\ref{fig:arch-contexto} ilustra la interacción del sistema con
+los actores externos, mientras que la Figura~\ref{fig:arch-componentes} descompone los módulos internos.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{contexto.png}
+  \caption{Diagrama de contexto del sistema (C4 Nivel 1).}
+  \label{fig:arch-contexto}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{componentes.png}
+  \caption{Diagrama de componentes del workspace transbank-SDK (C4 Nivel 2-3).}
+  \label{fig:arch-componentes}
+\end{figure}
+
+\subsection{Descomposición de capas}
+\begin{enumerate}
+  \item \textbf{Capa de Protocolo Sans-IO (\texttt{transbank\_pos::protocol}):} es el núcleo funcional puro.
+    No realiza operaciones de lectura o escritura en archivos, sockets o puertos serie, ni consulta la hora
+    del sistema operativo. Se compone de:
+    \begin{itemize}
+      \item \texttt{lrc}: cálculo del byte de redundancia longitudinal mediante operación XOR iterativa.
+      \item \texttt{frame}: serialización de payloads delimitados por caracteres de control ASCII (STX, ETX).
+      \item \texttt{decoder}: máquina de estados por streaming (\texttt{FrameDecoder}) que recibe slices de bytes
+        arbitrarios y emite eventos de enlace estructurados (\texttt{LinkEvent}).
+      \item \texttt{fields}: funciones auxiliares de despiece, recorte y conversión numérica tolerante.
+      \item \texttt{types}: tipos de dominio encapsulados bajo el patrón \emph{newtype} (\texttt{Amount}, \texttt{Ticket}).
+    \end{itemize}
+  \item \textbf{Capa de Enlace (\texttt{transbank\_pos::link}):} gestiona la sincronización temporal y el protocolo
+    de acuses de recibo. Coordina la espera de ACK, el envío de NAK ante tramas corruptas, los plazos de espera
+    y la captura de estados intermedios (\texttt{0900}). La lógica de decisiones se centraliza en el módulo
+    \texttt{exchange}, compartida entre clientes síncronos y asíncronos.
+  \item \textbf{Capa de Clientes (\texttt{transbank\_pos::client}):} expone las estructuras tipadas
+    \texttt{PosIntegrado} y \texttt{PosAutoservicio}. Cada método valida los argumentos de entrada, construye
+    el mensaje mediante la capa de protocolo, delega el intercambio en la capa de enlace y desensambla el
+    payload resultante en tipos de respuesta seguros.
+  \item \textbf{Capa de Transporte (\texttt{transbank\_pos::transport}):} abstrae el medio de comunicación físico
+    o virtual mediante el trait \texttt{Transport}.
+\end{enumerate}
+
+\subsection{Registro de decisiones arquitectónicas (ADR)}
+La Tabla~\ref{tab:adr-resumen} resume los fundamentos técnicos de diseño formalizados en el proyecto.
+
+\begin{longtable}{@{}p{1.4cm}p{4.0cm}p{4.2cm}p{4.8cm}@{}}
+\caption{Registro de decisiones arquitectónicas (ADR).}\label{tab:adr-resumen}\\
+\toprule
+\textbf{ADR} & \textbf{Decisión de diseño} & \textbf{Motivación técnica} & \textbf{Consecuencia / Beneficio} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ADR} & \textbf{Decisión de diseño} & \textbf{Motivación técnica} & \textbf{Consecuencia / Beneficio} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+ADR-01 & Núcleo sans-IO en módulo \texttt{protocol}. & Desacoplar algoritmos de protocolo de llamadas I/O y del reloj. & Pruebas exhaustivas deterministas y reutilización en simulador y async. \\
+ADR-02 & API bloqueante síncrona por defecto. & Las operaciones en el POS duran segundos y son estrictamente secuenciales. & Simplicidad de uso directo en hilos secundarios de apps de escritorio (Tauri). \\
+ADR-03 & Rechazo financiero no es \texttt{Err}. & Una tarjeta declinada es un resultado comercial normal. & El canal y el enlace permanecen intactos; no se contamina el manejo de errores I/O. \\
+ADR-04 & Prohibición de reintento post-ACK. & Reenviar una venta en vuelo puede generar un doble cobro al cliente. & Fuerza al host a consultar \texttt{last\_sale()} garantizando idempotencia. \\
+ADR-05 & Decodificador por máquina de estados. & Los buffers serie pueden fragmentar tramas en bytes arbitrarios. & Robusto ante trozos parciales y valores de LRC iguales a bytes de control. \\
+ADR-06 & ISO-8859-1 en entrada, ASCII en salida. & Los comprobantes impresos por POS chilenos contienen tildes y caracteres locales. & Previene errores de parseo UTF-8 en respuestas; emisión limpia hacia el POS. \\
+ADR-07 & Fechas como tipos locales propios. & El terminal informa fecha y hora sin información de huso horario. & Evita dependencias pesadas como \texttt{chrono} y asunciones erróneas de zona. \\
+ADR-08 & Trait \texttt{Transport} con timeout. & Homogeneizar lectura serie, sockets TCP y búferes en memoria. & Permite alternar hardware real y simulador sin cambiar el enlace. \\
+ADR-09 & Reloj inyectable mediante \texttt{Clock}. & Los timeouts de venta duran 150 segundos en producción. & Pruebas unitarias de timeouts sin retrasos artificiales (\texttt{sleep}). \\
+ADR-10 & Simulador como crate independiente. & Facilitar pruebas end-to-end a consumidores externos del SDK. & Disponible como biblioteca y como binario de red (\texttt{tbk-pos-sim}). \\
+ADR-11 & Dual licensing MIT / Apache-2.0. & Convención estándar del ecosistema Rust corporativo. & Permite integración estática libre sin restricciones virales de copyleft. \\
+\end{longtable}
+
+\clearpage
+\section{Stack tecnológico detallado y justificación de componentes}
+
+\subsection{Lenguaje de programación y compilador}
+\begin{itemize}
+  \item \textbf{Rust 2024 (MSRV 1.85):} el proyecto exige Rust estable con versión mínima soportada 1.85
+    (\texttt{rust-version = "1.85"} en \texttt{[workspace.package]}). Rust garantiza seguridad de memoria en tiempo
+    de compilación sin sobrecarga de recolector de basura (garbage collector), fundamental para bibliotecas
+    de control de hardware y bajo nivel.
+  \item \textbf{Resolver Cargo versión 3:} asegura resolución determinista y unificada de dependencias en
+    todo el workspace multirate.
+\end{itemize}
+
+\subsection{Dependencias externas autorizadas}
+La lista de dependencias está estrictamente cerrada (\texttt{.ai-context/architecture.md} §3). Cada pieza
+cumple un propósito específico y verificado:
+\begin{itemize}
+  \item \textbf{\texttt{thiserror = "2"}:} utilizado en \texttt{transbank-pos} para generar implementaciones
+    eficientes del trait \texttt{std::error::Error} con cero costo en runtime y sin allocaciones dinámicas.
+  \item \textbf{\texttt{serialport = "4"}:} biblioteca multiplataforma para interactuar con puertos serie
+    físicos (RS-232 y emulación USB CDC-ACM), listar puertos del sistema y consultar metadatos USB (Vendor ID,
+    Product ID). Se encapsula tras la feature opcional por defecto \texttt{serial}.
+  \item \textbf{\texttt{serde = "1"} y \texttt{serde\_json = "1"}:} feature opcional \texttt{serde} que habilita
+    la serialización automática de respuestas y eventos, facilitando el puenteado hacia frontends en TypeScript
+    (Tauri) y la salida formateada en la CLI.
+  \item \textbf{\texttt{tracing = "0.1"} y \texttt{tracing-subscriber = "0.3"}:} instrumentación estructurada
+    para depuración de tramas en bajo nivel. Su costo en CPU es cero cuando no hay suscriptores activos.
+  \item \textbf{\texttt{clap = "4"}:} parser de argumentos de línea de comandos en modo declarativo (\texttt{derive})
+    utilizado en los binarios \texttt{tbk-pos} y \texttt{tbk-pos-sim}.
+  \item \textbf{\texttt{proptest = "1"}:} framework de pruebas basadas en propiedades utilizado como dev-dependency
+    para fuzzing del decodificador de tramas y verificación de invariantes algebraicos.
+  \item \textbf{\texttt{tokio = "1"} y \texttt{tokio-serial = "5"}:} runtime asíncrono activado exclusivamente
+    bajo la feature \texttt{tokio} (incorporada en ASYNC-01) para entornos de servidor concurrentes.
+\end{itemize}
+
+\subsection{Exclusiones tecnológicas deliberadas}
+Para mantener un perfil de seguridad impecable y un tamaño mínimo de binario, se han rechazado
+deliberadamente las siguientes dependencias comunes:
+\begin{itemize}
+  \item \textbf{Sin base de datos relacional (SQL):} el SDK es una biblioteca de enlace de bajo nivel sin estado
+    persistente. El historial transaccional corresponde a la base de datos del host de facturación o a la
+    memoria fiscal de Transbank.
+  \item \textbf{Sin \texttt{anyhow}:} el uso de errores no tipados basados en \texttt{Box<dyn Error>} destruye la
+    capacidad de los consumidores de inspeccionar programáticamente las fallas. Se utiliza tipado exhaustivo.
+  \item \textbf{Sin \texttt{chrono} ni \texttt{time}:} los terminales POS emiten fechas sin información de huso
+    horario. Introducir librerías pesadas de calendario aumenta la superficie de ataque y el tiempo de compilación.
+    Se utilizan los tipos propios \texttt{PosDate} y \texttt{PosTime}.
+  \item \textbf{Sin \texttt{bytes}:} las tramas físicas tienen un tamaño máximo normativo de 4096 bytes; el uso
+    de slices de memoria contigua en stack y vectores nativos de Rust evita dependencias innecesarias.
+  \item \textbf{Sin variables globales (\texttt{once\_cell}, \texttt{lazy\_static}):} el SDK no mantiene estado
+    global oculto. Toda la configuración y los recursos residen en instancias concretas de \texttt{Link} y
+    \texttt{PosIntegrado}.
+\end{itemize}
+
+\clearpage
+\section{Estructura del repositorio y desglose módulo por módulo}
+
+\subsection{Árbol de directorios del workspace}
+\begin{lstlisting}[language=bash,caption={Estructura física del repositorio transbank-SDK.}]
+transbank-SDK/
+├── Cargo.toml                 # Configuración de workspace Cargo y lints comunes
+├── Cargo.lock                 # Bloqueo de dependencias reproducibles
+├── clippy.toml                # Políticas estrictas de auditoría de código
+├── rustfmt.toml               # Formato de código (edición 2024)
+├── .github/workflows/ci.yml   # Pipeline de integración continua
+├── crates/
+│   ├── transbank-pos/         # Biblioteca principal del SDK (sans-IO + clientes)
+│   │   ├── Cargo.toml         # Features: serial (default), serde, tracing, tokio
+│   │   └── src/
+│   │       ├── lib.rs         # Re-exports de API pública y directivas forbid
+│   │       ├── error.rs       # Enumeración Error y alias Result
+│   │       ├── codes.rs       # ResponseCode e IntermediateStatus
+│   │       ├── exchange.rs    # Máquina de intercambio síncrona/asíncrona
+│   │       ├── link.rs        # Link<T, C> y configuración LinkConfig
+│   │       ├── protocol/      # lrc, frame, decoder, fields, types, function_codes
+│   │       ├── message/       # integrado, autoservicio, responses
+│   │       ├── client/        # PosIntegrado, PosAutoservicio
+│   │       ├── transport/     # Transport trait, memory, tcp, serial
+│   │       └── tokio/         # AsyncLink, AsyncPosIntegrado
+│   ├── transbank-pos-sim/     # Crate simulador de terminal POS
+│   │   ├── Cargo.toml
+│   │   └── src/               # PosSimulator, Scenario, SimTransport, servidor TCP
+│   └── transbank-pos-cli/     # Herramienta de línea de comandos
+│       ├── Cargo.toml
+│       └── src/main.rs        # Binario tbk-pos con subcomandos clap
+└── docs/                      # Documentación para humanos, diagramas e informes
+\end{lstlisting}
+
+\subsection{Desglose de módulos en transbank-pos}
+\begin{itemize}
+  \item \textbf{\texttt{protocol::lrc}:} contiene la función \texttt{calculate\_lrc(data: \&[u8]) -> u8},
+    que computa la suma de verificación mediante XOR acumulativo. Es utilizada por codificadores,
+    decodificadores y por el simulador.
+  \item \textbf{\texttt{protocol::decoder}:} implementa la estructura \texttt{FrameDecoder}. Lee flujos de
+    bytes entrantes byte a byte sin descartar buffers y emite \texttt{LinkEvent::Ack}, \texttt{LinkEvent::Nak}
+    o \texttt{LinkEvent::Frame(payload)}.
+  \item \textbf{\texttt{protocol::types}:} expone newtypes validados en construcción. \texttt{Amount::new(monto)}
+    falla inmediatamente si el valor está fuera del rango [50, 999.999.999]. \texttt{Ticket::new(str)} valida
+    que los caracteres sean ASCII alfanuméricos y provee el método \texttt{padded()} para alinear a 6 posiciones.
+  \item \textbf{\texttt{message::responses}:} define las estructuras \texttt{SaleResponse}, \texttt{LoadKeysResponse},
+    \texttt{CloseResponse}, \texttt{TotalsResponse} y \texttt{RefundResponse}. Sobrescribe la implementación de
+    \texttt{std::fmt::Debug} para asegurar que campos como el número de cuenta y el texto del voucher nunca
+    se impriman en texto claro en logs de producción.
+  \item \textbf{\texttt{link}:} estructura \texttt{Link<T, C>} que parametriza el transporte y el reloj.
+    Implementa \texttt{send\_command} (disparo simple con espera de ACK), \texttt{request} (envío, ACK y espera
+    de respuesta final con soporte de tramas 0900) y \texttt{request\_list} (acumulación de múltiples tramas
+    hasta timeout de silencio).
+  \item \textbf{\texttt{client::integrado}:} cliente para terminales POS Integrado. Expone métodos tipados
+    como \texttt{sale}, \texttt{sale\_with\_status}, \texttt{last\_sale}, \texttt{refund}, \texttt{totals},
+    \texttt{sales\_detail}, \texttt{close}, \texttt{load\_keys} y \texttt{poll}.
+\end{itemize}
+
+\clearpage
+\section{Modelo de datos del protocolo y layouts de tramas}
+
+\subsection{Estructura física de la trama}
+Todas las comunicaciones en el protocolo Transbank utilizan tramas enmarcadas por caracteres de control ASCII:
+\begin{center}
+\texttt{<STX> + Payload + <ETX> + <LRC>}
+\end{center}
+\begin{itemize}
+  \item \textbf{\texttt{<STX>} (0x02):} Start of Text. Delimita el inicio de una trama física.
+  \item \textbf{Payload:} secuencia de campos alfanuméricos separados por el carácter pleca (\texttt{|}).
+    El primer campo corresponde invariablemente al código de función de cuatro dígitos (por ejemplo, \texttt{0200}).
+  \item \textbf{\texttt{<ETX>} (0x03):} End of Text. Marca el término de los datos útiles.
+  \item \textbf{\texttt{<LRC>}:} Longitudinal Redundancy Check (1 byte). Checksum calculado mediante la operación
+    XOR de todos los bytes comprendidos desde el primer carácter del payload hasta el byte \texttt{<ETX>} inclusive.
+\end{itemize}
+
+\subsection{Catálogo de comandos POS Integrado}
+La Tabla~\ref{tab:comandos-integrado} detalla los códigos de función principales del POS Integrado.
+
+\begin{longtable}{@{}p{1.4cm}p{3.8cm}p{3.2cm}p{6.0cm}@{}}
+\caption{Comandos del protocolo POS Integrado.}\label{tab:comandos-integrado}\\
+\toprule
+\textbf{Código} & \textbf{Operación} & \textbf{Respuesta esperada} & \textbf{Estructura del payload de envío} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Código} & \textbf{Operación} & \textbf{Respuesta esperada} & \textbf{Estructura del payload de envío} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{0100} & Poll (sondeo) & Solo ACK (0x06) & \texttt{0100} \\
+\texttt{0800} & Carga de llaves & \texttt{0810} & \texttt{0800} \\
+\texttt{0200} & Venta normal & \texttt{0210} & \texttt{0200|monto|ticket|||voucher} \\
+\texttt{0270} & Venta multicódigo & \texttt{0271} & \texttt{0270|monto|ticket|||voucher|codigo\_comercio} \\
+\texttt{0250} & Última venta & \texttt{0260} & \texttt{0250|} \\
+\texttt{0260} & Detalle de ventas & Múltiples \texttt{0261} & \texttt{0260|imprimir\_en\_pos|} \\
+\texttt{1200} & Anulación de venta & \texttt{1210} & \texttt{1200|numero\_operacion} \\
+\texttt{0700} & Totales del día & \texttt{0710} & \texttt{0700} \\
+\texttt{0500} & Cierre de terminal & \texttt{0510} & \texttt{0500||} \\
+\texttt{0300} & Modo normal & Solo ACK (0x06) & \texttt{0300} \\
+\texttt{0900} & Mensaje intermedio & N/A (unidireccional) & Emitido por el POS hacia el host (\texttt{0900|codigo}) \\
+\end{longtable}
+
+\subsection{Estructura de la respuesta de venta (0210 / 0260)}
+La Tabla~\ref{tab:layout-venta} documenta exhaustivamente los 21 campos que componen la respuesta de
+venta (\texttt{0210}) y la consulta de última venta (\texttt{0260}).
+
+\begin{longtable}{@{}p{0.8cm}p{4.2cm}p{1.8cm}p{1.8cm}p{4.6cm}p{1.4cm}@{}}
+\caption{Layout de campos de respuesta de venta (0210 / 0260).}\label{tab:layout-venta}\\
+\toprule
+\textbf{Pos} & \textbf{Nombre de campo} & \textbf{Tipo} & \textbf{Longitud} & \textbf{Descripción} & \textbf{Redactado} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Pos} & \textbf{Nombre de campo} & \textbf{Tipo} & \textbf{Longitud} & \textbf{Descripción} & \textbf{Redactado} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+0 & Código de función & Texto & 4 caracteres & Constante \texttt{"0210"} o \texttt{"0260"} & No \\
+1 & Código de respuesta & Numérico & 2 dígitos & 00 = Aprobado, otros = Rechazo & No \\
+2 & Código de comercio & Numérico & Hasta 12 & Identificador del comercio afiliado & No \\
+3 & ID del terminal & Texto & Hasta 8 & Número de serie lógico del POS & No \\
+4 & Ticket / Boleta & Texto & Hasta 6 & Identificador asignado por el comercio & No \\
+5 & Código autorización & Texto & 6 caracteres & Código otorgado por el switch emisor & No \\
+6 & Monto final cobrado & Numérico & Hasta 9 & Monto autorizado en pesos chilenos & No \\
+7 & Cantidad de cuotas & Numérico & 2 dígitos & Número de cuotas pactadas & No \\
+8 & Monto de la cuota & Numérico & Hasta 9 & Valor individual de cada cuota & No \\
+9 & Últimos 4 dígitos & Texto & 4 caracteres & Terminación de la tarjeta bancaria & No \\
+10 & Número operación & Texto & 6 dígitos & Identificador correlativo del POS & No \\
+11 & Tipo de tarjeta & Texto & 2 caracteres & \texttt{CR} (Crédito), \texttt{DB} (Débito), \texttt{PR} (Prepago) & No \\
+12 & Fecha contable & Texto & 8 caracteres & Formato \texttt{ddMMyyyy} asignado por Transbank & No \\
+13 & Número de cuenta & Texto & Hasta 19 & Cuenta bancaria enmascarada & \textbf{Sí} \\
+14 & Marca de tarjeta & Texto & 2 caracteres & \texttt{VI}, \texttt{MC}, \texttt{AX}, \texttt{DB}, \texttt{DC}, \texttt{MG} & No \\
+15 & Fecha real & Texto & 8 caracteres & Fecha cronológica local (\texttt{ddMMyyyy}) & No \\
+16 & Hora real & Texto & 6 caracteres & Hora cronológica local (\texttt{HHmmss}) & No \\
+17 & ID del empleado & Numérico & Opcional & Identificador del cajero o turno & No \\
+18 & Monto de propina & Numérico & Opcional & Propina autorizada en pesos & No \\
+19 & Código de comercio prov & Numérico & Opcional & Presente en ventas multicódigo & No \\
+20 & Texto del voucher & Texto & Múltiplo 40 & Líneas de comprobante fiscal impreso & \textbf{Sí} \\
+\end{longtable}
+
+\subsection{Catálogo de códigos de respuesta Transbank}
+La Tabla~\ref{tab:catalogo-codigos} enumera los códigos de respuesta oficiales más frecuentes.
+
+\begin{longtable}{@{}p{1.2cm}p{5.5cm}p{4.0cm}p{3.5cm}@{}}
+\caption{Principales códigos de respuesta de Transbank.}\label{tab:catalogo-codigos}\\
+\toprule
+\textbf{Código} & \textbf{Mensaje oficial (Español)} & \textbf{Significado técnico} & \textbf{Acción requerida} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Código} & \textbf{Mensaje oficial (Español)} & \textbf{Significado técnico} & \textbf{Acción requerida} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{00} & Aprobado & Transacción autorizada exitosamente & Registrar pago y emitir boleta \\
+\texttt{01} & Rechazado & Transacción declinada por el banco emisor & Solicitar otro medio de pago \\
+\texttt{02} & Host no responde & Pérdida de enlace entre el POS y Transbank & Reintentar o verificar conexión \\
+\texttt{13} & Debe ejecutar Cierre & Memoria transaccional del POS llena & Ejecutar \texttt{close()} de inmediato \\
+\texttt{26} & Debe cargar llaves & Llaves criptográficas caducadas o nulas & Ejecutar \texttt{load\_keys()} \\
+\texttt{67} & Cierre requerido & Switch bancario exige corte de jornada & Ejecutar \texttt{close()} \\
+\texttt{74} & Error de comunicación & Falla de capa física o enlace del POS & Revisar cable serie / alimentación \\
+\texttt{76} & Error de cierre & Discrepancia en la cuadratura de totales & Contactar soporte Transbank \\
+\texttt{77} & Cierre no balanceado & Diferencias de conciliación financiera & Imprimir reporte y auditar caja \\
+\texttt{90} & Inicialización exitosa & Código de aprobación en POS Autoservicio & Terminal listo para operar \\
+\end{longtable}
+
+\clearpage
+\section{Interfaz de programación de aplicaciones (API pública)}
+
+\subsection{Filosofía y tipos de dominio}
+La API pública de \texttt{transbank-pos} sigue un diseño idiomático, declarativo y fuertemente tipado.
+El uso de newtypes imposibilita errores comunes en tiempo de compilación. El siguiente fragmento
+ilustra la invocación estándar de una venta en un POS Integrado.
+
+\begin{lstlisting}[language=Rust,caption={Ejemplo completo de cobro de venta en transbank-pos.}]
+use transbank_pos::{PosIntegrado, SaleRequest, IntermediateStatus};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Apertura del puerto serie en Linux/macOS a 115.200 baudios
+    let mut pos = PosIntegrado::open("/dev/ttyACM0")?;
+
+    // Construccion y validacion rigurosa de la solicitud
+    let request = SaleRequest::new(12500, "BOL101")?
+        .with_voucher(true);
+
+    println!("Iniciando cobro de $12.500...");
+
+    // Ejecucion con callback en tiempo real para la interfaz grafica
+    let response = pos.sale_with_status(&request, |status| {
+        match status {
+            IntermediateStatus::Code(code) => {
+                println!("Estado del POS: {}", code.message());
+            }
+            IntermediateStatus::Unknown(raw) => {
+                println!("Estado intermedio no documentado: {}", raw);
+            }
+        }
+    })?;
+
+    if response.is_approved() {
+        println!("Venta APROBADA! Codigo Autorizacion: {}",
+            response.authorization_code.unwrap_or_default());
+        println!("Tarjeta: {:?} termina en {}",
+            response.card_brand, response.last4_digits.unwrap_or_default());
+    } else {
+        println!("Venta RECHAZADA. Motivo: {}", response.response_code);
+    }
+
+    Ok(())
+}
+\end{lstlisting}
+
+\subsection{Autoconexión y detección de puertos}
+Para simplificar la configuración en tiendas con múltiples dispositivos periféricos (impresoras térmicas,
+lectores de código de barras, balanzas), el SDK implementa una función de autodescubrimiento:
+
+\begin{lstlisting}[language=Rust,caption={Detección y conexión automática al terminal POS.}]
+use transbank_pos::serial;
+
+// Escanea puertos serie, priorizando dispositivos USB, e intenta un comando poll
+if let Some((pos, info)) = PosIntegrado::autoconnect(serial::DEFAULT_BAUD_INTEGRADO)? {
+    println!("Terminal conectado exitosamente en puerto: {}", info.name);
+    if let (Some(vid), Some(pid)) = (info.vid, info.pid) {
+        println!("Dispositivo USB identificado: VID={:04x} PID={:04x}", vid, pid);
+    }
+} else {
+    eprintln!("No se detecto ningun terminal POS conectado y listo.");
+}
+\end{lstlisting}
+
+\clearpage
+\section{Algoritmos y reglas de negocio críticas con ejemplos numéricos}
+
+\subsection{Algoritmo de cálculo del Longitudinal Redundancy Check (LRC)}
+El protocolo exige que cada trama física termine con un byte de paridad longitudinal (LRC).
+La regla matemática formal define el LRC como el resultado de aplicar una operación binaria XOR
+(\texttt{\^{}}) sucesiva sobre todos los bytes comprendidos entre el primer byte del payload
+(inmediatamente posterior al carácter \texttt{<STX>} \texttt{0x02}) y el carácter delimitador
+\texttt{<ETX>} (\texttt{0x03}) inclusive:
+\begin{equation}
+\text{LRC} = B_1 \oplus B_2 \oplus B_3 \oplus \dots \oplus B_n \oplus \text{0x03}
+\end{equation}
+
+\subsubsection{Ejemplo numérico paso a paso}
+Consideremos la orden de venta por un monto de \$12.000 con ticket \texttt{"T00001"} y voucher habilitado:
+\begin{itemize}
+  \item \textbf{Payload:} \texttt{"0200|12000|T00001|||1"}
+  \item \textbf{Secuencia de bytes (ASCII y Hexadecimal):}
+\end{itemize}
+
+\begin{longtable}{@{}p{1.5cm}p{1.8cm}p{2.5cm}p{8.0cm}@{}}
+\caption{Traza de cálculo de LRC para payload de venta.}\label{tab:traza-lrc}\\
+\toprule
+\textbf{Carácter} & \textbf{Byte (Hex)} & \textbf{Acumulador XOR} & \textbf{Explicación binaria del acumulador} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Carácter} & \textbf{Byte (Hex)} & \textbf{Acumulador XOR} & \textbf{Explicación binaria del acumulador} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{'0'} & \texttt{0x30} & \texttt{0x30} & Inicialización con primer byte (\texttt{0011 0000}) \\
+\texttt{'2'} & \texttt{0x32} & \texttt{0x02} & \texttt{0x30 \^{} 0x32 = 0011 0000 \^{} 0011 0010 = 0000 0010} \\
+\texttt{'0'} & \texttt{0x30} & \texttt{0x32} & \texttt{0x02 \^{} 0x30 = 0011 0010} \\
+\texttt{'0'} & \texttt{0x30} & \texttt{0x02} & \texttt{0x32 \^{} 0x30 = 0000 0010} \\
+\texttt{'|'} & \texttt{0x7C} & \texttt{0x7E} & \texttt{0x02 \^{} 0x7C = 0111 1110} \\
+\texttt{'1'} & \texttt{0x31} & \texttt{0x4F} & \texttt{0x7E \^{} 0x31 = 0100 1111} \\
+\texttt{'2'} & \texttt{0x32} & \texttt{0x7D} & \texttt{0x4F \^{} 0x32 = 0111 1101} \\
+\texttt{'0'} & \texttt{0x30} & \texttt{0x4D} & \texttt{0x7D \^{} 0x30 = 0100 1101} \\
+\texttt{'0'} & \texttt{0x30} & \texttt{0x7D} & \texttt{0x4D \^{} 0x30 = 0111 1101} \\
+\texttt{'0'} & \texttt{0x30} & \texttt{0x4D} & \texttt{0x7D \^{} 0x30 = 0100 1101} \\
+\texttt{'|'} & \texttt{0x7C} & \texttt{0x31} & \texttt{0x4D \^{} 0x7C = 0011 0001} \\
+\texttt{'T'} & \texttt{0x54} & \texttt{0x65} & \texttt{0x31 \^{} 0x54 = 0110 0101} \\
+\texttt{'0'} & \texttt{0x30} & \texttt{0x55} & \texttt{0x65 \^{} 0x30 = 0101 0101} \\
+\texttt{'0'} & \texttt{0x30} & \texttt{0x65} & \texttt{0x55 \^{} 0x30 = 0110 0101} \\
+\texttt{'0'} & \texttt{0x30} & \texttt{0x55} & \texttt{0x65 \^{} 0x30 = 0101 0101} \\
+\texttt{'0'} & \texttt{0x30} & \texttt{0x65} & \texttt{0x55 \^{} 0x30 = 0110 0101} \\
+\texttt{'1'} & \texttt{0x31} & \texttt{0x54} & \texttt{0x65 \^{} 0x31 = 0101 0100} \\
+\texttt{'|'} & \texttt{0x7C} & \texttt{0x28} & \texttt{0x54 \^{} 0x7C = 0010 1000} \\
+\texttt{'|'} & \texttt{0x7C} & \texttt{0x54} & \texttt{0x28 \^{} 0x7C = 0101 0100} \\
+\texttt{'|'} & \texttt{0x7C} & \texttt{0x28} & \texttt{0x54 \^{} 0x7C = 0010 1000} \\
+\texttt{'1'} & \texttt{0x31} & \texttt{0x19} & \texttt{0x28 \^{} 0x31 = 0001 1001} \\
+\texttt{<ETX>} & \texttt{0x03} & \textbf{\texttt{0x1A}} & \texttt{0x19 \^{} 0x03 = 0001 1010 (Checksum final: 0x1A)} \\
+\end{longtable}
+
+La trama final física transmitida al puerto serie contiene 24 bytes exactos:
+\begin{center}
+\texttt{[0x02, '0', '2', '0', '0', '|', '1', '2', '0', '0', '0', '|', 'T', '0', '0', '0', '0', '1', '|', '|', '|', '1', 0x03, 0x1A]}
+\end{center}
+
+\subsection{Regla de negocio crítica: ``Nunca Doble Cobro''}
+La regla más delicada en terminales de cobro bancario establece que \textbf{bajo ninguna circunstancia}
+se debe reintentar una venta que ya haya sido acusada de recibo (ACK) por el POS.
+
+\subsubsection{Caso de falla operativo}
+\begin{enumerate}
+  \item El cajero cobra una venta de \$15.000 (boleta \texttt{"BOL101"}).
+  \item El POS acusa recibo con \texttt{0x06} (ACK). En este momento, el POS ha bloqueado su pantalla,
+    solicita la tarjeta del cliente y contacta al switch adquirente por su red 3G.
+  \item Transcurren 150 segundos y la red adquirente sufre lentitud extrema, o bien el cable USB sufre
+    una caída de tensión transitoria. El SDK agota su temporizador y emite \texttt{Err(Error::ResponseTimeout)}.
+  \item \textbf{Conducta prohibida:} si el software de caja reintentara automáticamente la venta enviando
+    una nueva trama \texttt{0200}, y la primera venta se hubiese aprobado silenciosamente en Transbank,
+    el cliente sufriría un \textbf{doble cobro} de \$15.000 (\$30.000 en total).
+  \item \textbf{Conducta correcta y forzada por el SDK:}
+    \begin{itemize}
+      \item El SDK entrega un error de timeout indicando que el resultado es desconocido.
+      \item El host invoca inmediatamente \texttt{PosIntegrado::last\_sale()} (comando \texttt{0250}).
+      \item Si la última venta en el POS tiene ticket \texttt{"BOL101"}, monto \$15.000 y código \texttt{00},
+        se concluye con certeza absoluta que la venta sí se aprobó. El host guarda el voucher y entrega la boleta.
+      \item Si el ticket no coincide o el código es de rechazo, el cobro original no se aplicó y es seguro
+        ofrecer al cajero la posibilidad de reintentar el pago con un ticket nuevo.
+    \end{itemize}
+\end{enumerate}
+
+\clearpage
+\section{Seguridad de la información y protección de la privacidad}
+
+\subsection{Modelo de amenazas STRIDE}
+La Tabla~\ref{tab:stride-resumen} analiza las amenazas evaluadas sobre el canal de comunicaciones serie y red.
+
+\begin{longtable}{@{}p{2.8cm}p{4.2cm}p{6.8cm}@{}}
+\caption{Modelo de amenazas STRIDE aplicado a transbank-SDK.}\label{tab:stride-resumen}\\
+\toprule
+\textbf{Categoría STRIDE} & \textbf{Amenaza específica} & \textbf{Mitigación técnica en el SDK} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Categoría STRIDE} & \textbf{Amenaza específica} & \textbf{Mitigación técnica en el SDK} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\textbf{Spoofing} (Suplantación) & Inyección de tramas de aprobación falsas desde red local. & El simulador TCP escucha estrictamente en \texttt{127.0.0.1} por defecto. Se exige flag explícito para exponer interfaz de red (\texttt{SEC-04}). \\
+\textbf{Tampering} (Manipulación) & Alteración de montos o tickets en tránsito en el cable serie. & Verificación estricta de redundancia longitudinal (LRC) en cada trama. Rechazo con NAK ante discrepancia de bits. \\
+\textbf{Repudiation} (Repudio) & Negación de autorización de una venta realizada. & Preservación del payload original crudo (\texttt{raw}) y registro del código de autorización bancario. \\
+\textbf{Information Disclosure} (Fuga) & Exposición de datos de tarjeta o vouchers en archivos de trazas. & Redacción obligatoria de número de cuenta y texto de voucher en implementaciones de \texttt{Debug} y \texttt{tracing}. \\
+\textbf{Denial of Service} (DoS) & Desbordamiento de memoria por inyección de streams continuos de bytes. & Decodificador por streaming con buffers acotados (\texttt{SAFE-02}). Límite de 4096 bytes por trama. \\
+\textbf{Elevation of Privilege} & Ejecución de código malicioso mediante explotación de memoria. & Prohibición absoluta de bloques \texttt{unsafe} en el código (\texttt{\#![forbid(unsafe\_code)]}). \\
+\end{longtable}
+
+\subsection{Aislamiento y redacción de datos sensibles}
+En conformidad con las restricciones \texttt{SEC-02} y \texttt{SEC-03}, el SDK redacta automáticamente
+toda información potencialmente sensible en sus representaciones de depuración. La estructura
+\texttt{SaleResponse} muestra únicamente la longitud en caracteres del voucher y oculta la cuenta:
+
+\begin{lstlisting}[language=Rust,caption={Comportamiento de redacción en SaleResponse::fmt.}]
+// Salida redactada por defecto al imprimir con {:?} en logs de aplicacion:
+SaleResponse {
+    function_code: "0210",
+    response_code: 00 (Aprobado),
+    ticket: Some("BOL101"),
+    amount: Some(15000),
+    last4_digits: Some("1234"),
+    account_number: Some("<redacted 19>"),
+    voucher: Some("<voucher: 320 chars>"),
+    ...
+}
+\end{lstlisting}
+
+\clearpage
+\section{Estrategia de pruebas y aseguramiento de la calidad}
+
+\subsection{Pirámide de pruebas del workspace}
+El aseguramiento de la calidad se organiza en cuatro niveles de verificación rigurosos:
+\begin{enumerate}
+  \item \textbf{Pruebas unitarias de algoritmos sans-IO:} verificación de vectores de prueba conocidos
+    byte a byte para LRC, framing y campos de mensaje.
+  \item \textbf{Pruebas basadas en propiedades (\texttt{proptest}):} generación de miles de secuencias
+    arbitrarias de bytes para comprobar que el decodificador nunca entra en pánico ni cicla infinitamente.
+  \item \textbf{Pruebas de integración cliente-simulador:} ejecución de intercambios transaccionales completos
+    (ventas, anulaciones, cierres, timeouts, corrupción de tramas) sobre canales virtuales \texttt{SimTransport}.
+  \item \textbf{Pruebas de interfaz CLI:} ejecución de subcomandos reales mediante el ejecutable compilado
+    enlazado con el simulador en memoria.
+\end{enumerate}
+
+\subsection{Desglose de pruebas por suite}
+La Tabla~\ref{tab:desglose-tests} resume la distribución real de las 401 pruebas ejecutadas por \texttt{cargo test}.
+
+\begin{longtable}{@{}p{5.5cm}p{5.5cm}p{3.0cm}@{}}
+\caption{Distribución de pruebas automatizadas en el workspace.}\label{tab:desglose-tests}\\
+\toprule
+\textbf{Suite de pruebas} & \textbf{Archivo / Crate} & \textbf{Pruebas aprobadas} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Suite de pruebas} & \textbf{Archivo / Crate} & \textbf{Pruebas aprobadas} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Unitarias de protocolo y tipos & \texttt{transbank\_pos (lib.rs)} & 75 pruebas \\
+Enlace asíncrono y propiedades & \texttt{tests/async\_link.rs} & 46 pruebas \\
+Mensajería de Autoservicio & \texttt{tests/autoservicio\_messages.rs} & 13 pruebas \\
+Cliente Asíncrono Tokio & \texttt{tests/client\_async.rs} & 13 pruebas \\
+Cliente Autoservicio & \texttt{tests/client\_autoservicio.rs} & 20 pruebas \\
+Cliente Integrado & \texttt{tests/client\_integrado.rs} & 17 pruebas \\
+Propiedades del Decodificador & \texttt{tests/decoder\_properties.rs} & 3 pruebas \\
+Mensajería POS Integrado & \texttt{tests/integrado\_messages.rs} & 3 pruebas \\
+Verificación de Licencias & \texttt{tests/license\_files.rs} & 1 prueba \\
+Lógica de Enlace y ACK/NAK & \texttt{tests/link.rs} & 22 pruebas \\
+Casos Borde de Enlace & \texttt{tests/link\_edge\_cases.rs} & 18 pruebas \\
+Verificación basada en Modelo & \texttt{tests/model\_based.rs} & 1 prueba \\
+Propiedades de Serialización & \texttt{tests/properties.rs} & 16 pruebas \\
+Compatibilidad Serde JSON & \texttt{tests/serde.rs} & 6 pruebas \\
+Transporte TCP de red & \texttt{tests/transport\_tcp.rs} & 5 pruebas \\
+Unitarias CLI \texttt{tbk-pos} & \texttt{transbank-pos-cli (main.rs)} & 9 pruebas \\
+Integración CLI & \texttt{transbank-pos-cli/tests/cli.rs} & 28 pruebas \\
+CLI Autoservicio & \texttt{tests/cli\_autoservicio.rs} & 16 pruebas \\
+Pruebas de Humo (Smoke) & Varios crates & 4 pruebas \\
+Simulador POS y TCP Server & \texttt{transbank-pos-sim} & 56 pruebas \\
+Doctests de documentación & \texttt{transbank-pos} y \texttt{sim} & 39 pruebas \\
+\midrule
+\textbf{Total general verificado} & \textbf{Workspace completo} & \textbf{401 pruebas (0 fallas)} \\
+\bottomrule
+\end{longtable}
+
+\subsection{Comprobación de mutaciones con cargo-mutants}
+Durante la fase de endurecimiento (\texttt{TEST-01}), el código de producción fue sometido a análisis de
+mutaciones sintácticas con la herramienta \texttt{cargo-mutants}. Se inyectaron 654 mutaciones en los
+módulos de enlace, redacción, decodificación y aprobación. \textbf{El 100\% de los mutantes viables fueron
+detectados y eliminados} por la suite de pruebas (0 escapes), demostrando que ningún assert es cosmético.
+
+\clearpage
+\section{Integración continua y entrega continua (CI/CD)}
+
+\subsection{Pipeline en GitHub Actions}
+El repositorio implementa una suite de integración continua definida en \texttt{.github/workflows/ci.yml}.
+El pipeline se ejecuta ante eventos de push en las ramas \texttt{main} y \texttt{develop}, así como en
+disparos manuales (\texttt{workflow\_dispatch}).
+
+\subsection{Pasos de verificación del CI}
+Cada corrida del pipeline ejecuta rigurosamente la secuencia de verificación estipulada en §8 de \texttt{AGENTS.md}:
+\begin{enumerate}
+  \item \textbf{Verificación de formato de código:} \texttt{cargo fmt --all --check}.
+  \item \textbf{Auditoría de lints completa:} \texttt{cargo clippy --workspace --all-targets --all-features -- -D warnings}.
+  \item \textbf{Auditoría sin features opcionales:} \texttt{cargo clippy -p transbank-pos --no-default-features -- -D warnings}.
+  \item \textbf{Ejecución de pruebas automatizadas:} \texttt{cargo test --workspace --all-features}.
+  \item \textbf{Generación de documentación sin advertencias:} \texttt{RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features}.
+  \item \textbf{Auditoría de sincronización documental:} \texttt{docs/build-docs.sh --check}.
+\end{enumerate}
+
+\section{Configuración del sistema y variables de entorno}
+
+La Tabla~\ref{tab:variables-entorno} documenta las variables de entorno reconocidas por el repositorio.
+
+\begin{longtable}{@{}p{4.2cm}p{3.2cm}p{6.6cm}@{}}
+\caption{Variables de entorno reconocidas por el workspace.}\label{tab:variables-entorno}\\
+\toprule
+\textbf{Variable} & \textbf{Valor por defecto} & \textbf{Propósito y contexto} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Variable} & \textbf{Valor por defecto} & \textbf{Propósito y contexto} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{RUST\_LOG} & Vacío (desactivado) & Nivel de detalle de eventos de depuración estructurada (\texttt{error}, \texttt{warn}, \texttt{info}, \texttt{debug}, \texttt{trace}). \\
+\texttt{PLANTUML} & Detección automática & Ruta explícita al binario ejecutable de PlantUML para regeneración de diagramas. \\
+\texttt{TBK\_POS\_SIM\_ADDR} & \texttt{127.0.0.1:7777} & Dirección de escucha por defecto del servidor simulador TCP. \\
+\end{longtable}
+
+\clearpage
+\section{Despliegue, instalación y distribución}
+
+\subsection{Inclusión como dependencia en proyectos Cargo}
+Para consumir el SDK en un software de caja o kiosco en Rust, se incorpora en el archivo \texttt{Cargo.toml}:
+
+\begin{lstlisting}[language=bash,caption={Configuración de dependencias en proyectos consumidores.}]
+[dependencies]
+transbank-pos = { version = "1.0.0", features = ["serial", "serde"] }
+\end{lstlisting}
+
+\subsection{Configuración de permisos de puerto serie en el sistema operativo}
+La comunicación directa con el hardware requiere permisos de acceso a los nodos de dispositivo:
+\begin{itemize}
+  \item \textbf{Linux (udev rules):} por defecto, las distribuciones Linux restringen el acceso a dispositivos
+    serie a usuarios miembros del grupo \texttt{dialout} o \texttt{uucp}. Para otorgar acceso permanente al
+    software de facturación sin privilegios de administrador, se crea una regla en \texttt{/etc/udev/rules.d/99-transbank.rules}:
+\begin{lstlisting}[language=bash,caption={Regla udev para terminales Transbank en Linux.}]
+# Terminal POS Transbank (ejemplo VID FTDI / Silicon Labs)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", MODE="0660", GROUP="dialout"
+\end{lstlisting}
+    El usuario debe pertenecer al grupo correspondiente: \texttt{sudo usermod -aG dialout \$USER}.
+  \item \textbf{macOS:} los dispositivos USB CDC-ACM y adaptadores FTDI son expuestos de forma automática bajo
+    el subsistema IOKit como \texttt{/dev/cu.usbserial-*} o \texttt{/dev/cu.usbmodem*}. No se requieren reglas adicionales.
+  \item \textbf{Windows:} el sistema asigna nombres correlativos de puerto COM (\texttt{COM3}, \texttt{COM4}) a
+    través del controlador \texttt{usbser.sys}.
+\end{itemize}
+
+\clearpage
+\section{Operación y manual de runbooks para soporte técnico}
+
+\subsection{Rutina de apertura diaria y carga de llaves (Código 26)}
+\textbf{Síntoma:} el terminal rechaza operaciones de venta con el código de error \texttt{26 (Debe cargar llaves)}.
+\textbf{Causa:} expiración o revocación de las llaves de sesión criptográfica entre el terminal y Transbank.
+\textbf{Solución:}
+\begin{enumerate}
+  \item Ejecutar desde la línea de comandos de la caja:
+\begin{lstlisting}[language=bash]
+tbk-pos --port /dev/ttyACM0 load-keys
+\end{lstlisting}
+  \item Verificar que la respuesta devuelva \texttt{Código 00 (Aprobado)}.
+  \item Proceder con las operaciones habituales de venta.
+\end{enumerate}
+
+\subsection{Rutina de cierre de terminal y arqueo de caja (Códigos 13, 67, 74, 76, 77)}
+\textbf{Síntoma:} el POS rechaza ventas con código \texttt{13 (Debe ejecutar Cierre)} o \texttt{67 (Cierre requerido)}.
+\textbf{Causa:} la memoria interna del terminal ha alcanzado el límite máximo diario o el switch adquirente
+exige el corte contable de la jornada.
+\textbf{Solución:}
+\begin{enumerate}
+  \item Imprimir o consultar previamente los acumulados del día:
+\begin{lstlisting}[language=bash]
+tbk-pos --port /dev/ttyACM0 totals
+\end{lstlisting}
+  \item Ejecutar el comando formal de cierre de terminal:
+\begin{lstlisting}[language=bash]
+tbk-pos --port /dev/ttyACM0 close --yes
+\end{lstlisting}
+  \item El POS imprimirá el comprobante de cierre físico y reiniciará sus acumuladores contables a cero.
+\end{enumerate}
+
+\subsection{Procedimiento de recuperación ante corte de comunicación en venta}
+\textbf{Síntoma:} la aplicación de caja informa \texttt{Error::ResponseTimeout} o el cable serie fue desconectado
+durante el ingreso de la tarjeta.
+\textbf{Solución:}
+\begin{enumerate}
+  \item \textbf{NO reintentar el cobro inmediatamente.}
+  \item Consultar la última venta asentada en el POS:
+\begin{lstlisting}[language=bash]
+tbk-pos --port /dev/ttyACM0 last-sale
+\end{lstlisting}
+  \item Comparar el número de ticket y el monto reportado con la venta que sufrió la interrupción.
+  \item Si coinciden y el código es \texttt{00}, ingresar manualmente la venta como aprobada en el sistema de caja.
+  \item Si no coinciden o el código es de rechazo, proceder a cobrar nuevamente con un ticket nuevo.
+\end{enumerate}
+
+\clearpage
+\section{Limitaciones conocidas y gestión de deuda técnica}
+
+\subsection{Brechas conocidas del estado actual}
+En concordancia con \texttt{.ai-context/implementation-status.md}, se registran las siguientes limitaciones:
+\begin{itemize}
+  \item \textbf{Validación con hardware físico pendiente (HW-01):} la totalidad de la lógica de protocolo,
+    enlace, simulación y clientes ha sido validada contra el simulador y suites de pruebas exhaustivas. La
+    certificación final con un terminal POS físico Verifone/Ingenico conectado a un puerto USB real está
+    reservada al dueño del repositorio en la tarea \texttt{HW-01} antes de publicar en crates.io.
+  \item \textbf{Preguntas abiertas de la especificación (OPEN-01 a OPEN-08):} existen detalles menores del
+    firmware de Transbank pendientes de verificación experimental (por ejemplo, si los terminales emiten
+    múltiples acuses de recibo en operaciones lentas o la tasa de baudios exacta en modelos específicos).
+  \item \textbf{Código 90 en POS Integrado:} la versión 1.0.0 de \texttt{SaleResponse::is\_approved()}
+    evalúa como aprobado el código de respuesta 90, diseñado originalmente para la inicialización de POS
+    Autoservicio. Esta discrepancia histórica está documentada y su resolución formal se decidirá en el PR \#1.
+\end{itemize}
+
+\section{Roadmap de evolución del proyecto}
+
+La Tabla~\ref{tab:roadmap-resumen} resume el plan maestro de tareas del repositorio.
+
+\begin{longtable}{@{}p{1.8cm}p{7.2cm}p{2.2cm}p{2.8cm}@{}}
+\caption{Roadmap maestro de evolución de transbank-SDK.}\label{tab:roadmap-resumen}\\
+\toprule
+\textbf{ID Tarea} & \textbf{Alcance y entregable} & \textbf{Prioridad} & \textbf{Estado} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID Tarea} & \textbf{Alcance y entregable} & \textbf{Prioridad} & \textbf{Estado} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{INFRA-01} & Workspace Cargo, lints estrictos y pipeline de CI. & P0 & Completada \\
+\texttt{PROTO-01} & Enmarcado de tramas, codificador, decodificador y LRC. & P0 & Completada \\
+\texttt{PROTO-02} & Tipos, mensajes y códigos de respuesta de POS Integrado. & P0 & Completada \\
+\texttt{LINK-01} & Trait Transport, reloj inyectable y capa de enlace Link. & P0 & Completada \\
+\texttt{SIM-01} & Simulador sans-IO, inyector de escenarios y servidor TCP. & P0 & Completada \\
+\texttt{CLIENT-01} & Cliente de alto nivel PosIntegrado con pruebas end-to-end. & P0 & Completada \\
+\texttt{SERIAL-01} & Soporte de puerto serie físico, autoconnect y TCP. & P1 & Completada \\
+\texttt{CLI-01} & Interfaz de línea de comandos \texttt{tbk-pos}. & P1 & Completada \\
+\texttt{AUTO-01} & Soporte completo de POS Autoservicio (cliente + sim + CLI). & P2 & Completada \\
+\texttt{ASYNC-01} & API asíncrona con runtime Tokio (\texttt{AsyncPosIntegrado}). & P2 & Completada \\
+\texttt{HDOC-01} & Estructura documental humana, diagramas y README robusto. & P1 & Completada \\
+\texttt{HDOC-02} & Informe técnico e informe de diagramas (PDF y DOCX). & P1 & \textbf{En curso} \\
+\texttt{HDOC-03} & Informe legal chileno e informe de seguridad (STRIDE). & P1 & Planificada \\
+\texttt{HDOC-04} & Guía de despliegue e informe de pruebas. & P1 & Planificada \\
+\texttt{HW-01} & Validación en terreno con terminal POS físico real (Dueño). & P0 & Pendiente \\
+\texttt{REL-01} & Publicación oficial en crates.io (versión 1.0.0). & P0 & Pendiente \\
+\texttt{INT-01} & Integración en \texttt{rework-sistema-facturacion} (app Tauri). & P1 & Planificada \\
+\texttt{FUT-01} & Investigación de soporte para POS Android y Bluetooth. & P2 & Futura \\
+\end{longtable}
+
+\clearpage
+\section{Glosario de términos técnicos}
+
+\begin{glosario}
+  \termino{ACK}{Acknowledge (0x06). Byte de control que confirma la recepción correcta de una trama.}
+  \termino{Adquirente}{Entidad financiera (Transbank) encargada de procesar las transacciones de pago con tarjeta en los comercios afiliados.}
+  \termino{Baudios}{Unidad de medida de la velocidad de transmisión de datos por un canal serie físico (baud rate).}
+  \termino{CDC-ACM}{Communications Device Class - Abstract Control Model. Estándar USB universal para emular un puerto serie sobre un enlace USB.}
+  \termino{CLP}{Peso chileno. Moneda oficial de curso legal en Chile, indivisible en centavos para efectos de pagos presenciales.}
+  \termino{DTE}{Documento Tributario Electrónico. Boleta o factura electrónica emitida formalmente ante el SII.}
+  \termino{ETX}{End of Text (0x03). Byte de control que marca el fin de los datos útiles de una trama.}
+  \termino{LRC}{Longitudinal Redundancy Check. Algoritmo de paridad bidireccional basado en XOR acumulativo.}
+  \termino{NAK}{Negative Acknowledge (0x15). Byte de control que indica rechazo por checksum incorrecto.}
+  \termino{PAN}{Primary Account Number. Número de 16 dígitos grabado en el plástico de la tarjeta bancaria.}
+  \termino{PCI DSS}{Payment Card Industry Data Security Standard. Marco de seguridad global para protección de datos de tarjetahabientes.}
+  \termino{PIN}{Personal Identification Number. Clave secreta numérica del titular de la tarjeta.}
+  \termino{POS}{Point of Sale. Terminal electrónico físico para cobro presencial con tarjeta.}
+  \termino{Sans-IO}{Patrón de diseño de software que aísla por completo el protocolo de red de las operaciones de entrada/salida y del reloj.}
+  \termino{SII}{Servicio de Impuestos Internos de la República de Chile.}
+  \termino{STX}{Start of Text (0x02). Byte de control que marca el inicio de una trama física.}
+  \termino{Switch}{Plataforma informática centralizada de autorización de transacciones financieras.}
+  \termino{Tauri}{Framework de desarrollo de aplicaciones de escritorio seguras utilizando frontend web y backend en Rust.}
+\end{glosario}
+
+\clearpage
+\section{Anexo: Colección completa de diagramas de arquitectura}
+
+Este anexo recopila las representaciones gráficas de alta resolución de los diez diagramas que sustentan
+el diseño de \texttt{transbank-SDK}.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{contexto.png}
+  \caption{Anexo 1: Contexto del sistema (C4 Nivel 1).}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{componentes.png}
+  \caption{Anexo 2: Componentes del workspace (C4 Nivel 2-3).}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{casos-de-uso.png}
+  \caption{Anexo 3: Casos de uso por actor.}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{clases-dominio.png}
+  \caption{Anexo 4: Clases y tipos del dominio.}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{estados-enlace.png}
+  \caption{Anexo 5: Máquina de estados del enlace.}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{flujo-venta.png}
+  \caption{Anexo 6: Flujo de proceso de venta.}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{secuencia-venta.png}
+  \caption{Anexo 7: Secuencia de venta exitosa en POS Integrado.}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{secuencia-recuperacion-venta.png}
+  \caption{Anexo 8: Secuencia de recuperación y nunca doble cobro.}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{despliegue.png}
+  \caption{Anexo 9: Despliegue de infraestructura y conectividad.}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{ecosistema.png}
+  \caption{Anexo 10: Integración en el ecosistema raysac.}
+\end{figure}
+
+\end{document}

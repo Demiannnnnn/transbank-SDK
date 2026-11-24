@@ -1,0 +1,48 @@
+@startuml casos-de-uso
+!include ../../plantilla/estilo.puml
+title Casos de uso por actor — transbank-SDK
+
+left to right direction
+
+actor "Cajero / Operador" as cajero
+actor "Cliente (Pagador)" as cliente
+actor "Administrador / Supervisor" as admin
+actor "Desarrollador / Técnico" as dev
+actor "Software de Caja (Host)" as app
+
+rectangle "transbank-SDK & Terminal POS" {
+  usecase "CU-01: Cobrar venta con tarjeta" as UC_Venta
+  usecase "CU-02: Cobrar en autoservicio" as UC_Auto
+  usecase "CU-03: Recuperar última venta tras timeout\n(Regla Nunca Doble Cobro)" as UC_Recuperar
+  usecase "CU-04: Anular venta de crédito" as UC_Anular
+  usecase "CU-05: Consultar totales del día" as UC_Totales
+  usecase "CU-06: Obtener detalle de ventas" as UC_Detalle
+  usecase "CU-07: Realizar cierre de terminal" as UC_Cierre
+  usecase "CU-08: Cargar llaves criptográficas" as UC_Llaves
+  usecase "CU-09: Probar conectividad (Poll)" as UC_Poll
+  usecase "CU-10: Diagnóstico por CLI (tbk-pos)" as UC_CLI
+  usecase "CU-11: Simular POS para tests (tbk-pos-sim)" as UC_Sim
+}
+
+cajero --> UC_Venta
+cajero --> UC_Recuperar
+cajero --> UC_Anular
+
+cliente --> UC_Venta : Presenta tarjeta e ingresa PIN
+cliente --> UC_Auto : Presenta tarjeta en kiosco
+
+admin --> UC_Totales
+admin --> UC_Detalle
+admin --> UC_Cierre
+admin --> UC_Llaves
+
+dev --> UC_CLI
+dev --> UC_Sim
+
+app --> UC_Poll
+app --> UC_Venta
+app --> UC_Auto
+app --> UC_Recuperar
+
+UC_Venta ..> UC_Recuperar : <<extend>> en caso de timeout
+@enduml

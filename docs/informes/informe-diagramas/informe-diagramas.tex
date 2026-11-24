@@ -1,0 +1,581 @@
+\documentclass{../../plantilla/raysac-informe}
+
+\producto{transbank-SDK}
+\titulo{Informe de Diagramas de Arquitectura y Flujos}
+\titulocorto{Informe de Diagramas}
+\version{1.0.0}
+\fecha{2026-11-22}
+\clasificacion{Uso interno}
+\autor{raysac}
+
+\begin{document}
+
+\portada
+
+\begin{controlversiones}
+  \cvfila{1.0}{2026-11-22}{raysac}{Versión inicial con la colección completa de diagramas de arquitectura, secuencias, estados, dominio y despliegue.}
+\end{controlversiones}
+
+\avisolegalestandar
+
+\clearpage
+\preliminares
+
+\section{Introducción y marco de modelado}
+
+El presente documento recopila y describe exhaustivamente el conjunto de diagramas arquitectónicos,
+estructurales y de comportamiento del proyecto \texttt{transbank-SDK}. Este proyecto proporciona un
+SDK no oficial en el lenguaje de programación Rust para la comunicación bidireccional con terminales
+de punto de venta (POS) físicos de Transbank (modelos POS Integrado y POS Autoservicio) a través de
+interfaces serie/USB y puentes de red TCP, integrando adicionalmente un simulador de terminal y una
+interfaz de línea de comandos (CLI).
+
+\subsection{Notación y estándar visual}
+
+Todos los diagramas han sido elaborados utilizando PlantUML bajo el estándar visual compartido del
+ecosistema raysac (\texttt{docs/plantilla/estilo.puml}). Las fuentes oficiales residen en
+\texttt{docs/diagramas/fuentes/*.puml}, siendo compiladas de forma determinista a representaciones
+vectoriales SVG y mapas de bits PNG de alta resolución mediante el script \texttt{docs/build-docs.sh}.
+
+Se emplean convenciones formales de modelado:
+\begin{itemize}
+  \item \textbf{C4 Model (Niveles 1 y 2-3):} para delimitar las fronteras del sistema, actores humanos,
+    sistemas externos y la descomposición interna en componentes de software y bibliotecas.
+  \item \textbf{UML 2.5:} para diagramas de clases de dominio, máquinas de estado de enlace, diagramas
+    de actividad de procesos de negocio, casos de uso y diagramas de secuencia temporal.
+  \item \textbf{Estereotipo \texttt{<<planificado>>}:} utilizado para destacar visualmente con estilo
+    atenuado componentes o flujos contemplados en el diseño pero cuya implementación final está sujeta
+    a validaciones posteriores con hardware físico o tareas programadas en el roadmap.
+\end{itemize}
+
+\subsection{Catálogo de diagramas incluidos}
+
+La Tabla~\ref{tab:catalogo-diagramas} enumera los diez diagramas que conforman el cuerpo de este informe.
+
+\begin{longtable}{@{}p{1.2cm}p{5.8cm}p{3.2cm}p{4.2cm}@{}}
+\caption{Catálogo de diagramas del proyecto transbank-SDK.}\label{tab:catalogo-diagramas}\\
+\toprule
+\textbf{N°} & \textbf{Diagrama} & \textbf{Tipo de modelo} & \textbf{Archivo fuente} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{N°} & \textbf{Diagrama} & \textbf{Tipo de modelo} & \textbf{Archivo fuente} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+01 & Contexto del sistema & C4 Nivel 1 & \texttt{contexto.puml} \\
+02 & Componentes del workspace & C4 Nivel 2-3 & \texttt{componentes.puml} \\
+03 & Casos de uso por actor & UML Casos de Uso & \texttt{casos-de-uso.puml} \\
+04 & Clases y tipos del dominio & UML Clases & \texttt{clases-dominio.puml} \\
+05 & Estados del enlace & UML Máquina de Estados & \texttt{estados-enlace.puml} \\
+06 & Flujo de proceso de venta & UML Actividad & \texttt{flujo-venta.puml} \\
+07 & Secuencia de venta exitosa & UML Secuencia & \texttt{secuencia-venta.puml} \\
+08 & Recuperación y nunca doble cobro & UML Secuencia & \texttt{secuencia-recuperacion-venta.puml} \\
+09 & Despliegue de infraestructura & UML Despliegue & \texttt{despliegue.puml} \\
+10 & Ecosistema retail y facturación & Integración C4 & \texttt{ecosistema.puml} \\
+\end{longtable}
+
+\clearpage
+\section{Diagrama 01: Contexto del sistema (C4 Nivel 1)}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{contexto.png}
+  \caption{Contexto del sistema transbank-SDK (C4 Nivel 1).}
+  \label{fig:contexto}
+\end{figure}
+
+\subsection{Propósito}
+El diagrama de contexto (Figura~\ref{fig:contexto}) ilustra la posición de \texttt{transbank-SDK}
+dentro del entorno operativo de una tienda comercial o caja de autoservicio. Delimita claramente la
+responsabilidad de la biblioteca respecto al software de facturación host, los operadores humanos, el
+dispositivo de hardware físico (POS) y la infraestructura bancaria adquirente operada por Transbank.
+
+\subsection{Elementos y actores}
+\begin{itemize}
+  \item \textbf{Cajero / Operador:} usuario humano que opera el software de punto de venta (caja atendida).
+  \item \textbf{Cliente (Pagador):} titular de la tarjeta que interactúa directamente con el terminal POS
+    para insertar/acercar su tarjeta e ingresar su clave secreta (PIN).
+  \item \textbf{Técnico / Integrador:} desarrollador o técnico de soporte que utiliza las herramientas CLI
+    para tareas de diagnóstico, prueba de puertos y certificación.
+  \item \textbf{Sistema de Facturación / Host (\texttt{rework-sistema-facturacion}):} aplicación de escritorio
+    (construida con Tauri y Rust) responsable de la venta y emisión de boletas tributarias.
+  \item \textbf{transbank-SDK (\texttt{transbank-pos}):} biblioteca de enlace y protocolo objeto del presente
+    diseño, ejecutada en el espacio de memoria del proceso host.
+  \item \textbf{Terminal POS Transbank:} dispositivo de hardware (Verifone VX520, Ingenico Desk 3500) que
+    captura la tarjeta y procesa la transacción bancaria.
+  \item \textbf{Red Transbank:} switch adquirente centralizado que valida fondos y emite autorizaciones.
+  \item \textbf{Simulador POS (\texttt{tbk-pos-sim}):} emulador de terminal que reproduce fielmente el
+    protocolo sin requerir hardware físico conectado.
+  \item \textbf{Servicio de Impuestos Internos (SII):} entidad tributaria receptora de las boletas
+    electrónicas tras la confirmación del pago.
+\end{itemize}
+
+\subsection{Decisiones de diseño reflejadas}
+\begin{itemize}
+  \item \textbf{Aislamiento PCI DSS (SEC-01):} el host y el SDK nunca acceden al número de tarjeta completo
+    (PAN) ni al PIN. La captura sensible se realiza íntegramente dentro del terminal físico.
+  \item \textbf{Independencia de hardware mediante simulador (ADR-10):} el sistema permite el desarrollo y
+    las pruebas automáticas sin depender de un POS físico conectado.
+\end{itemize}
+
+\subsection{Guía de lectura}
+El flujo comienza en la esquina superior izquierda cuando el cajero inicia la operación en la caja.
+El software host delega la orden en el SDK mediante métodos de alto nivel. El SDK transforma la orden
+en bytes de protocolo y los envía al POS. El cliente ingresa su PIN en el POS; el POS contacta a Transbank
+y devuelve el resultado final al SDK. Una vez aprobado, el host genera la boleta electrónica ante el SII.
+
+\clearpage
+\section{Diagrama 02: Componentes del workspace (C4 Nivel 2-3)}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{componentes.png}
+  \caption{Componentes del workspace transbank-SDK (C4 Nivel 2-3).}
+  \label{fig:componentes}
+\end{figure}
+
+\subsection{Propósito}
+El diagrama de componentes (Figura~\ref{fig:componentes}) detalla la arquitectura modular del workspace
+Cargo y la separación en capas dentro del crate principal \texttt{transbank-pos}, el simulador
+\texttt{transbank-pos-sim} y la herramienta de terminal \texttt{transbank-pos-cli}.
+
+\subsection{Estructura de paquetes y capas}
+\begin{itemize}
+  \item \textbf{Capa de cliente (\texttt{client}):} contiene las estructuras \texttt{PosIntegrado},
+    \texttt{PosAutoservicio} y la variante asíncrona \texttt{AsyncPosIntegrado}. Proporciona métodos
+    de alto nivel con validación de argumentos y tipado estricto.
+  \item \textbf{Capa de enlace (\texttt{link}):} estructura \texttt{Link<T, C>} encargada del protocolo
+    de tramas: transmisión, espera de acuse de recibo (ACK/NAK), reintentos acotados, control de plazos
+    (timeouts), descarte de ruido y procesamiento de tramas intermedias (0900). Comparte lógica con
+    el módulo \texttt{exchange}.
+  \item \textbf{Capa de protocolo sans-IO (\texttt{protocol}):} lógica pura libre de efectos colaterales de
+    entrada/salida o reloj. Incluye el cálculo del checksum (\texttt{lrc}), codificación (\texttt{frame}),
+    máquina de estados de decodificación (\texttt{FrameDecoder}), formateo y parseo de mensajes
+    (\texttt{message}) y tipos de dominio (\texttt{types}, \texttt{codes}).
+  \item \textbf{Capa de transporte (\texttt{transport}):} abstracción mediante el trait \texttt{Transport},
+    con implementaciones para memoria con tiempo inyectable (\texttt{MemoryTransport}), sockets TCP
+    (\texttt{TcpTransport}) y puertos serie físicos RS-232/USB (\texttt{SerialTransport}).
+  \item \textbf{Crate simulador (\texttt{transbank-pos-sim}):} núcleo sans-IO (\texttt{PosSimulator}),
+    inyección de escenarios de falla (\texttt{Scenario}), transporte en memoria (\texttt{SimTransport})
+    y servidor de red TCP (\texttt{tbk-pos-sim}).
+  \item \textbf{Crate CLI (\texttt{transbank-pos-cli}):} binario \texttt{tbk-pos} que expone todas las
+    operaciones del cliente a la línea de comandos mediante \texttt{clap}.
+\end{itemize}
+
+\subsection{Decisiones de diseño reflejadas}
+\begin{itemize}
+  \item \textbf{Arquitectura sans-IO (ADR-01):} la lógica de análisis y generación de bytes no realiza
+    llamadas al sistema operativo, permitiendo una cobertura de pruebas exhaustiva mediante pruebas basadas
+    en propiedades (\texttt{proptest}) y reutilización directa en el simulador.
+  \item \textbf{Inyección de reloj (ADR-09):} el enlace parametriza el tiempo mediante el trait \texttt{Clock},
+    lo que permite ejecutar pruebas de timeouts de cientos de segundos en microsegundos de CPU.
+\end{itemize}
+
+\subsection{Guía de lectura}
+Las peticiones fluyen de arriba hacia abajo: desde el software del comercio hacia la capa de clientes,
+descendiendo al enlace que coordina la serialización de tramas en \texttt{protocol} y la emisión de
+bytes sobre la interfaz \texttt{Transport}. Las respuestas recibidas ascienden en sentido inverso,
+validándose su integridad antes de instanciar los tipos de dominio tipados.
+
+\clearpage
+\section{Diagrama 03: Casos de uso por actor}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{casos-de-uso.png}
+  \caption{Diagrama de casos de uso por actor.}
+  \label{fig:casos-de-uso}
+\end{figure}
+
+\subsection{Propósito}
+El diagrama de casos de uso (Figura~\ref{fig:casos-de-uso}) define las capacidades funcionales que el
+sistema ofrece a cada uno de sus actores humanos y automatizados, organizando las operaciones
+estándar de la normativa de Transbank POS Integrado y POS Autoservicio.
+
+\subsection{Actores y responsabilidades}
+\begin{itemize}
+  \item \textbf{Cajero / Operador:} usuario principal de punto de venta. Ejecuta el cobro de ventas (CU-01),
+    la anulación de transacciones de crédito del día (CU-04) y la recuperación de ventas dudosas (CU-03).
+  \item \textbf{Cliente (Pagador):} titular de la tarjeta bancaria. Participa en la venta presentando su medio
+    de pago e ingresando su número de identificación personal (PIN) en el teclado seguro del terminal.
+  \item \textbf{Administrador / Supervisor:} responsable del arqueo y cuadratura. Consulta los acumulados de
+    la jornada (CU-05: Totales), recupera el listado pormenorizado (CU-06: Detalle), efectúa el cierre formal
+    del terminal con el switch bancario (CU-07) e inicia la carga de llaves criptográficas (CU-08).
+  \item \textbf{Desarrollador / Técnico de Soporte:} utiliza la interfaz CLI \texttt{tbk-pos} para pruebas de
+    enlace en terreno (CU-10) y levanta el servidor \texttt{tbk-pos-sim} para pruebas de integración (CU-11).
+  \item \textbf{Software de Caja (Host):} sistema automatizado que realiza el sondeo periódico de presencia
+    (CU-09: Poll) y coordina la regla de oro de recuperación ante fallas de comunicación.
+\end{itemize}
+
+\subsection{Decisiones de diseño reflejadas}
+\begin{itemize}
+  \item \textbf{Extensión obligatoria de recuperación (CU-03 extend CU-01):} ante cualquier interrupción o
+    vencimiento del plazo de espera durante una venta, el caso de uso de cobro se extiende forzosamente
+    hacia la recuperación de la última transacción, evitando cobros duplicados al consumidor.
+  \item \textbf{Operación desatendida (CU-02):} el protocolo de POS Autoservicio adapta los comandos para
+    entornos desatendidos sin teclado de supervisor, gestionando la impresión externa del voucher.
+\end{itemize}
+
+\subsection{Guía de lectura}
+Los actores humanos se ubican en el costado izquierdo y los automatizados en el inferior. Las relaciones
+de asociación directa indican inicio de acción. La relación segmentada \texttt{<<extend>>} entre el cobro
+y la recuperación subraya el mecanismo de contingencia ante fallos.
+
+\clearpage
+\section{Diagrama 04: Clases y tipos del dominio}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{clases-dominio.png}
+  \caption{Diagrama de clases y tipos de dominio de transbank-pos.}
+  \label{fig:clases-dominio}
+\end{figure}
+
+\subsection{Propósito}
+El diagrama de clases (Figura~\ref{fig:clases-dominio}) presenta el modelo de tipos en memoria de la
+biblioteca \texttt{transbank-pos}. Ilustra cómo el sistema aprovecha el sistema de tipos estático de
+Rust para impedir estados inválidos, errores de redondeo financiero o datos malformados.
+
+\subsection{Elementos principales}
+\begin{itemize}
+  \item \textbf{Newtypes de dominio (\texttt{protocol::types}):}
+    \begin{itemize}
+      \item \texttt{Amount}: monto expresado en números enteros de pesos chilenos (\texttt{u32}). Rango
+        garantizado de 50 a 999.999.999 CLP. Prohíbe el uso de tipos de punto flotante (\texttt{f32}/\texttt{f64}).
+      \item \texttt{Ticket}: identificador alfanumérico de 1 a 6 caracteres ASCII, con formateo y padding
+        automático de ceros a la izquierda.
+      \item \texttt{OperationNumber}: número correlativo de operación de 1 a 6 dígitos para anulaciones.
+      \item \texttt{CommerceCode}: código de comercio de hasta 12 dígitos, soportando código principal (``0'').
+      \item \texttt{PosDate} y \texttt{PosTime}: tipos específicos para fecha (\texttt{ddMMyyyy}) y hora
+        (\texttt{HHmmss}) locales informadas por el terminal, sin supuestos erróneos de zona horaria.
+      \item \texttt{CardType} y \texttt{CardBrand}: enums que categorizan crédito, débito y prepago, y marcas.
+    \end{itemize}
+  \item \textbf{Catálogo de códigos (\texttt{codes}):}
+    \begin{itemize}
+      \item \texttt{ResponseCode}: enum que modela 56 códigos de respuesta oficiales de Transbank, con métodos
+        auxiliares \texttt{is\_approved()}, \texttt{requires\_close()} y \texttt{requires\_load\_keys()}.
+      \item \texttt{IntermediateStatus}: estados intermedios recibidos en tramas \texttt{0900}.
+    \end{itemize}
+  \item \textbf{Peticiones y Respuestas (\texttt{message}):}
+    \begin{itemize}
+      \item \texttt{SaleRequest} y \texttt{MultiCodeSaleRequest}: objetos de entrada inmutables.
+      \item \texttt{SaleResponse}: estructura integral con 21 campos que preserva el payload original
+        (\texttt{raw}) e implementa redacción automática de datos sensibles en \texttt{Debug}.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Decisiones de diseño reflejadas}
+\begin{itemize}
+  \item \textbf{Rechazo financiero no es Error (ADR-03):} una tarjeta rechazada produce \texttt{Ok(SaleResponse)}
+    donde \texttt{is\_approved() == false}. El tipo \texttt{Result::Err} se reserva para fallos de canal o protocolo.
+  \item \textbf{Tipos no exhaustivos (\texttt{\#[non\_exhaustive]}):} permite futuras expansiones de la
+    especificación oficial de Transbank sin provocar rupturas en el código de los consumidores de la API.
+\end{itemize}
+
+\subsection{Guía de lectura}
+Los paquetes agrupan conceptos relacionados. Los newtypes validan sus restricciones en sus constructores
+\texttt{new()} retornando \texttt{Result}. Las respuestas contienen instancias opcionales de estos tipos,
+reflejando con honestidad la presencia o ausencia de campos en las tramas enviadas por el POS.
+
+\clearpage
+\section{Diagrama 05: Máquina de estados del enlace}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{estados-enlace.png}
+  \caption{Máquina de estados de la capa de enlace Link<T>.}
+  \label{fig:estados-enlace}
+\end{figure}
+
+\subsection{Propósito}
+El diagrama de estados (Figura~\ref{fig:estados-enlace}) modela el ciclo de vida y los estados de
+transición del enlace \texttt{Link<T>}. Describe cómo se garantiza la entrega ordenada de tramas,
+el manejo estricto de reintentos, el control de plazos y la inmunidad ante ruido en el puerto serie.
+
+\subsection{Estados y transiciones}
+\begin{itemize}
+  \item \textbf{Desconectado:} estado inicial antes de abrir el puerto serie o conectar el socket TCP.
+  \item \textbf{Inactivo (Idle):} canal operativo listo para recibir comandos. Se ejecuta un drenado
+    preventivo de entrada para descartar bytes espurios residuales.
+  \item \textbf{EnviandoComando:} la trama física (STX + payload + ETX + LRC) es escrita mediante
+    \texttt{Transport::write\_all}. Se incrementa el contador de intentos.
+  \item \textbf{EsperandoAck:} espera activa de acuse de recibo con plazo acotado (\texttt{ack\_timeout = 2 s}).
+    Si expira o llega un NAK (0x15), se reintenta el envío hasta un máximo de 3 intentos (\texttt{max\_attempts}).
+    Si se agotan, transiciona a \texttt{ErrorTerminal} con \texttt{Error::NoAck}.
+  \item \textbf{EsperandoRespuesta:} el POS ha tomado el control. Se espera la trama de respuesta definitiva
+    bajo un temporizador global (\texttt{response\_timeout = 150 s}).
+    \begin{itemize}
+      \item Si llega una trama \texttt{0900} (mensaje intermedio), se responde inmediatamente con ACK (0x06),
+        se emite un evento al callback de la aplicación y se continúa esperando sin reiniciar el temporizador global.
+      \item Los bytes fuera de trama o basura eléctrica se descartan silenciosamente sin abortar la espera.
+    \end{itemize}
+  \item \textbf{VerificandoLrc:} recibida la trama completa, se recalcula el checksum XOR. Si es incorrecto,
+    se emite un NAK y se tolera hasta 3 fallas (\texttt{Error::BadLrc}). Si es válido, se emite ACK al POS.
+  \item \textbf{RecibiendoDetalle:} estado especializado para comandos multilínea (\texttt{0261}/\texttt{0291}),
+    donde las tramas se acumulan secuencialmente hasta detectar un silencio de 500 ms (\texttt{detail\_tail}).
+\end{itemize}
+
+\subsection{Decisiones de diseño reflejadas}
+\begin{itemize}
+  \item \textbf{Inmutabilidad del temporizador ante tramas 0900 (LINK-04):} el plazo máximo de 150 segundos
+    no se reinicia por la recepción de tramas intermedias, garantizando un límite superior predecible.
+  \item \textbf{ACK inmediato antes de parsear (LINK-01):} la capa de enlace reconoce la recepción física
+    correcta de la trama antes de someter su contenido a análisis léxico o sintáctico.
+\end{itemize}
+
+\subsection{Guía de lectura}
+Siga las flechas desde el círculo negro superior. Observe la bifurcación crítica en \texttt{EsperandoAck}:
+un comando simple (como \texttt{poll} o \texttt{set\_normal\_mode}) retorna a Inactivo tras recibir ACK,
+mientras que un comando con respuesta (como \texttt{sale}) pasa a \texttt{EsperandoRespuesta}.
+
+\clearpage
+\section{Diagrama 06: Flujo de proceso de venta}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{flujo-venta.png}
+  \caption{Diagrama de actividad del proceso de venta en transbank-pos.}
+  \label{fig:flujo-venta}
+\end{figure}
+
+\subsection{Propósito}
+El diagrama de actividad (Figura~\ref{fig:flujo-venta}) expone la lógica algorítmica secuencial que se
+desencadena cuando una aplicación consumidora invoca el método \texttt{PosIntegrado::sale(\&req)}.
+
+\subsection{Etapas del proceso}
+\begin{enumerate}
+  \item \textbf{Validación de entrada:} comprobación rigurosa de límites de \texttt{Amount} (50 a 999.999.999 CLP)
+    y longitud/caracteres de \texttt{Ticket}. Rechazo temprano con \texttt{Error::InvalidArgument} sin tocar el puerto.
+  \item \textbf{Codificación y encuadre:} construcción del payload en formato Transbank
+    (\texttt{"0200|monto|ticket|||voucher"}), cálculo de LRC mediante XOR acumulativo y encapsulamiento entre STX y ETX.
+  \item \textbf{Transmisión inicial y bucle de ACK:} ciclo de envío con hasta 3 reintentos ante NAK o timeout de 2 s.
+  \item \textbf{Punto de no retorno:} una vez que el POS emite el byte ACK (0x06), el comando ha ingresado formalmente
+    al núcleo transaccional del hardware. A partir de este instante, el SDK prohíbe terminantemente reenviar la trama.
+  \item \textbf{Bucle de recepción de respuesta:} lectura continua de bytes con descarte de ruido. Procesamiento de
+    tramas intermedias \texttt{0900} (notificando al observador) hasta detectar la trama de terminación \texttt{0210}.
+  \item \textbf{Validación de integridad (LRC):} comprobación de redundancia longitudinal con hasta 3 intercambios de NAK.
+  \item \textbf{Parseo y resultado de negocio:} desensamblado del payload en una estructura tipada \texttt{SaleResponse}.
+    Si el código es 0, se marca aprobado; en caso contrario, se consigna el motivo de rechazo entregado por el switch.
+\end{enumerate}
+
+\subsection{Decisiones de diseño reflejadas}
+\begin{itemize}
+  \item \textbf{Principio nunca doble cobro (ADR-04, LINK-03):} el punto de no retorno asegura que bajo ninguna
+    circunstancia de falla posterior al ACK se genere una segunda orden de venta con el mismo o distinto ticket.
+  \item \textbf{Parseo honesto y tolerante (PROTO-05):} los campos vacíos o ausentes se traducen a \texttt{None},
+    sin inventar valores por defecto como ceros o cadenas vacías.
+\end{itemize}
+
+\subsection{Guía de lectura}
+Inicie en el nodo negro superior y siga la línea de control. Observe con especial atención el nodo de decisión
+de vencimiento del temporizador de 150 segundos, el cual conduce directamente a un estado de resultado
+desconocido que activa el protocolo de recuperación.
+
+\clearpage
+\section{Diagrama 07: Secuencia de venta exitosa}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{secuencia-venta.png}
+  \caption{Diagrama de secuencia de una venta aprobada en POS Integrado.}
+  \label{fig:secuencia-venta}
+\end{figure}
+
+\subsection{Propósito}
+El diagrama de secuencia (Figura~\ref{fig:secuencia-venta}) detalla la interacción temporal síncrona
+entre los distintos objetos del sistema durante una transacción de venta estándar exitosa, visualizando
+los intercambios de control a nivel de bytes en la interfaz física.
+
+\subsection{Intercambio de mensajes y tramas}
+\begin{enumerate}
+  \item El host invoca \texttt{sale\_with\_status(\&req, callback)} con un monto de \$12.000 y ticket \texttt{"T00001"}.
+  \item La capa cliente construye el payload y delega la ejecución en \texttt{Link::request}.
+  \item \texttt{Link} formatea los bytes serie: \texttt{<STX>0200|12000|T00001|||1<ETX><LRC>} y escribe en el transporte.
+  \item El POS físico responde inmediatamente con el byte \texttt{0x06} (ACK). La trama fue aceptada.
+  \item El terminal solicita la interacción del cliente y envía una trama intermedia:
+    \texttt{<STX>0900|01<ETX><LRC>} (``Esperando tarjeta'').
+  \item \texttt{Link} emite ACK (0x06) al POS y despacha el estado al callback registrado por el host.
+  \item El cliente inserta el chip e introduce su PIN en el teclado del terminal.
+  \item El POS envía una segunda trama \texttt{0900|03} (``Solicitando autorización'') que se acusa con ACK.
+  \item El POS transmite la solicitud financiera por su conexión de red (Ethernet/3G) al switch de Transbank.
+  \item Transbank autoriza el cobro (código 00, código de autorización \texttt{"123456"}).
+  \item El POS envía por serie la trama final: \texttt{<STX>0210|00|597029414300|SIM01|T00001|123456|12000|...<ETX><LRC>}.
+  \item \texttt{Link} comprueba el checksum, emite el ACK final (0x06) y retorna el payload crudo al cliente.
+  \item El cliente analiza el payload, genera \texttt{SaleResponse} y el POS imprime el comprobante fiscal.
+\end{enumerate}
+
+\subsection{Decisiones de diseño reflejadas}
+\begin{itemize}
+  \item \textbf{Visibilidad de estados intermedios sin polling (API-02):} el callback síncrono permite
+    a la interfaz de usuario host reflejar en tiempo real mensajes como ``Ingrese tarjeta'' o ``Procesando pago''.
+  \item \textbf{ACK bilateral riguroso (PROTO-01):} cada trama enviada o recibida es acusada formalmente con
+    un byte de control ACK (0x06), cumpliendo de forma estricta la especificación de Transbank.
+\end{itemize}
+
+\subsection{Guía de lectura}
+Las líneas de vida verticales representan las entidades activas. El tiempo avanza hacia abajo. Las flechas
+continuas representan llamadas a métodos o transferencias de tramas completas, mientras que las flechas
+segmentadas indican acuses de recibo (ACK) o retornos de estructuras de datos.
+
+\clearpage
+\section{Diagrama 08: Secuencia de recuperación (Nunca doble cobro)}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{secuencia-recuperacion-venta.png}
+  \caption{Diagrama de secuencia del procedimiento de recuperación ante timeout.}
+  \label{fig:secuencia-recuperacion-venta}
+\end{figure}
+
+\subsection{Propósito}
+El diagrama de secuencia de recuperación (Figura~\ref{fig:secuencia-recuperacion-venta}) ilustra el
+comportamiento del sistema ante el peor escenario de falla operativa: un corte de comunicación, desconexión
+de cable o vencimiento del plazo de 150 segundos luego de que el comando de cobro fue acusado con éxito
+por el POS.
+
+\subsection{Protocolo de contingencia y reconciliación}
+\begin{enumerate}
+  \item El software host solicita una venta de \$15.000 asociada a la boleta interna \texttt{"BOL101"}.
+  \item El comando \texttt{0200} es transmitido y el terminal POS responde con ACK (0x06). La venta está en proceso.
+  \item Transcurren 150 segundos sin que el terminal entregue una respuesta definitiva (por ejemplo, congestión
+    severa de red adquirente, corte del bus USB o reinicio intempestivo del terminal).
+  \item \texttt{Link} agota el temporizador y retorna \texttt{Err(Error::ResponseTimeout \{ waited: 150s \})}.
+  \item \textbf{Regla Mandatoria (ADR-04):} el SDK prohíbe reintentar el comando. El estado de la transacción
+    bancaria es rigurosamente DESCONOCIDO (pudo haberse autorizado o rechazado internamente).
+  \item El software host invoca el método \texttt{PosIntegrado::last\_sale()} (comando Transbank \texttt{0250}).
+  \item El POS devuelve la última transacción asentada en su memoria no volátil mediante la trama \texttt{0260}.
+  \item \textbf{Reconciliación estricta en el Host:}
+    \begin{itemize}
+      \item \textbf{Caso A (Coincidencia):} si el \texttt{ticket} devuelto es \texttt{"BOL101"}, el monto es
+        exactamente \$15.000 y el código de respuesta es \texttt{Approved (00)}, el software de caja da por
+        cobrada la venta exitosamente. Se evita un cobro duplicado al cliente.
+      \item \textbf{Caso B (Discrepancia o Rechazo):} si el ticket corresponde a una venta anterior o el código
+        indica rechazo financiero, se concluye con certeza que el cobro no se aplicó. El cajero es notificado
+        y puede proceder con un nuevo intento bajo un nuevo número de ticket.
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Decisiones de diseño reflejadas}
+\begin{itemize}
+  \item \textbf{Sin reintento automático post-ACK (LINK-03):} reenviar una venta acusada puede originar
+    duplicación de cargos en la cuenta del tarjetahabiente, generando reclamos y sanciones comerciales.
+  \item \textbf{Idempotencia a nivel de aplicación:} la reconciliación delegada en el host empareja la orden
+    de venta con el registro oficial del hardware mediante identificadores unívocos.
+\end{itemize}
+
+\subsection{Guía de lectura}
+Observe los cuadros destacados de advertencia en color rosa (\texttt{\#F2DEDE}) que señalan la zona de
+incertidumbre transaccional, seguidos por el bloque alternativo (\texttt{alt/else}) final donde se
+resuelve la consistencia de la venta.
+
+\clearpage
+\section{Diagrama 09: Despliegue de infraestructura y conectividad}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{despliegue.png}
+  \caption{Diagrama de despliegue de infraestructura y conectividad.}
+  \label{fig:despliegue}
+\end{figure}
+
+\subsection{Propósito}
+El diagrama de despliegue (Figura~\ref{fig:despliegue}) muestra la topología de ejecución física y lógica
+del SDK, detallando los controladores de hardware soportados a nivel de sistema operativo (Linux, macOS,
+Windows), la emulación en red para entornos de desarrollo y el enlace con el switch adquirente.
+
+\subsection{Topología y nodos de despliegue}
+\begin{itemize}
+  \item \textbf{Host / Computador de Caja:} equipo donde corre la aplicación de comercio (por ejemplo,
+    \texttt{rework-sistema-facturacion} sobre Tauri) vinculada estáticamente con el crate \texttt{transbank-pos}.
+    Interactúa con los controladores del kernel del sistema operativo:
+    \begin{itemize}
+      \item \textbf{Linux:} controlador CDC-ACM o FTDI (\texttt{/dev/ttyACM0}, \texttt{/dev/ttyUSB0})
+        gobernado por reglas de \texttt{udev} que asignan permisos al grupo de usuarios \texttt{dialout}.
+      \item \textbf{macOS:} subsistema IOKit gestionando dispositivos \texttt{/dev/cu.usbserial-*} o
+        \texttt{/dev/cu.usbmodem*}.
+      \item \textbf{Windows:} controlador nativo de módem serie USB (\texttt{usbser.sys}) o Virtual COM Port (VCP)
+        asignando puertos COM correlativos (\texttt{COM3}, \texttt{COM4}).
+    \end{itemize}
+  \item \textbf{Entorno Local de Pruebas / CI:} nodo de desarrollo local o contenedor de integración continua
+    donde se ejecuta el binario \texttt{tbk-pos-sim} escuchando en la interfaz de loopback \texttt{127.0.0.1:7777}.
+  \item \textbf{Terminal Físico POS Transbank:} dispositivo hardware montado en caja (Verifone VX520,
+    Ingenico Desk 3500) que integra un puente USB-UART comercial (FTDI, CP2102, CH340) operando a 115.200 baudios
+    en POS Integrado y 19.200 baudios en Autoservicio.
+  \item \textbf{Infraestructura Transbank:} switch adquirente centralizado conectado con el terminal a través
+    de enlaces seguros Ethernet cableado, redes móviles 3G/4G o WiFi dedicado.
+\end{itemize}
+
+\subsection{Decisiones de diseño reflejadas}
+\begin{itemize}
+  \item \textbf{Restricción de red local en simulador (SEC-04):} el servidor del simulador enlaza por defecto
+    únicamente en \texttt{127.0.0.1}, impidiendo que terminales no autorizados en la red corporativa simulen pagos falsos.
+  \item \textbf{Independencia de plataforma en puerto serie (SAFE-03):} uso del crate \texttt{serialport}
+    para garantizar compatibilidad transparente entre sistemas POS bajo Linux, Windows y macOS.
+\end{itemize}
+
+\subsection{Guía de lectura}
+Las conexiones continuas representan interfaces físicas por cable serie/USB. Las líneas punteadas muestran
+comunicaciones virtuales sobre TCP loopback. Las notas inferiores resumen los postulados de seguridad y aislamiento.
+
+\clearpage
+\section{Diagrama 10: Integración en el ecosistema raysac}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{ecosistema.png}
+  \caption{Diagrama de integración en el ecosistema de retail y facturación raysac.}
+  \label{fig:ecosistema}
+\end{figure}
+
+\subsection{Propósito}
+El diagrama de integración (Figura~\ref{fig:ecosistema}) ilustra cómo \texttt{transbank-SDK} se inserta
+de manera limpia y sin fricción dentro del portafolio más amplio de productos de software de retail,
+pago y tributación desarrollados por el ecosistema raysac.
+
+\subsection{Relaciones entre sistemas}
+\begin{itemize}
+  \item \textbf{Puntos de Venta (Retail):} el software de facturación \texttt{rework-sistema-facturacion}
+    gestiona el carro de compras y los cobros de caja. Cuando el medio de pago es tarjeta, delega en
+    \texttt{transbank-SDK} la orquestación del terminal.
+  \item \textbf{Servicios Tributarios (\texttt{sii-sdk}):} una vez que \texttt{transbank-SDK} confirma
+    la autorización bancaria mediante un \texttt{SaleResponse} aprobado, el software host invoca
+    \texttt{sii-sdk} para generar y firmar digitalmente la Boleta Electrónica de Ventas y Servicios (DTE 39/41),
+    remitiéndola a los servidores del SII.
+  \item \textbf{Herramientas de Soporte y Calidad:} \texttt{tbk-pos-sim} permite certificar la aplicación de
+    facturación en pipelines de CI desprovistos de hardware, mientras que \texttt{tbk-pos} (CLI) facilita
+    la instalación inicial y auditoría en dependencias comerciales del cliente.
+\end{itemize}
+
+\subsection{Decisiones de diseño reflejadas}
+\begin{itemize}
+  \item \textbf{Biblioteca agnóstica del negocio (ADR-01, ADR-02):} \texttt{transbank-SDK} no contiene
+    tipos de facturación, ni referencias al SII, ni esquemas de bases de datos de inventario. Es un
+    componente de infraestructura reutilizable por cualquier software de punto de venta en Rust.
+  \item \textbf{Desacoplamiento temporal y de red:} las transacciones financieras con Transbank y la emisión
+    tributaria con el SII se ejecutan en fases lógicamente secuenciadas y atómicas.
+\end{itemize}
+
+\subsection{Guía de lectura}
+Siga la numeración ordinal del 1 al 8 para rastrear el ciclo completo de una venta en tienda: desde la
+intención de cobro, pasando por la validación bancaria en el POS, hasta el despacho final del documento
+fiscal al Servicio de Impuestos Internos.
+
+\clearpage
+\section{Glosario de términos de modelado}
+
+\begin{glosario}
+  \termino{ACK}{Acknowledge (0x06). Carácter de control ASCII utilizado para acusar recibo conforme de una trama.}
+  \termino{C4 Model}{Metodología de modelado de arquitectura de software en cuatro niveles de abstracción: Contexto, Contenedores, Componentes y Código.}
+  \termino{ETX}{End of Text (0x03). Carácter de control ASCII que marca la finalización del payload de una trama.}
+  \termino{LRC}{Longitudinal Redundancy Check. Checksum calculado mediante XOR acumulativo desde el primer byte del payload hasta ETX inclusive.}
+  \termino{NAK}{Negative Acknowledge (0x15). Carácter de control ASCII emitido ante errores de verificación de checksum (LRC).}
+  \termino{Newtype}{Patrón idiomático de Rust que envuelve un tipo primitivo en una tupla struct de un solo elemento para garantizar validaciones estrictas en tiempo de compilación.}
+  \termino{POS}{Point of Sale. Terminal electrónico físico para captura de tarjetas bancarias.}
+  \termino{Sans-IO}{Patrón de diseño arquitectónico que separa por completo los algoritmos de protocolo y parsing de cualquier operación de entrada/salida o reloj del sistema.}
+  \termino{STX}{Start of Text (0x02). Carácter de control ASCII que delimita el inicio de una trama.}
+  \termino{Tail Timeout}{Plazo de silencio (500 ms) empleado por la capa de enlace para detectar el fin de una respuesta compuesta por múltiples tramas sucesivas.}
+\end{glosario}
+
+\end{document}
